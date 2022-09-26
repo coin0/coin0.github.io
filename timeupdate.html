@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" style="height: 100%;">
+
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agora Fastboard</title>
+  </head>
+
+  <body style="height: 100%; margin:0 auto;">
+    <video autoplay controls ontimeupdate="myFunction(this)" style="width:500px;height300px;">
+      <source src="https://webdemo.agora.io/dujun/granturismo7-announcementtrailer_ps5_720p_60fps.mp4" type="video/mp4">
+        Your browser does not support HTML5 video.
+    </video>
+    <p id="info"></p>
+    <script>
+      let timeUpdateCount = 0;
+      let lastTimeUpdatedTime = 0;
+      let freezeTime = 0;
+      let playbackTime = 0;
+      function myFunction(event) {
+	  const now = Date.now();
+          timeUpdateCount++;
+	  if (timeUpdateCount < 10) {
+              lastTimeUpdatedTime = now;
+              return;
+	  }
+          const renderInterval = now - lastTimeUpdatedTime;
+          lastTimeUpdatedTime = now;
+          if (renderInterval > 500) {
+              freezeTime += renderInterval;
+          }
+          playbackTime += renderInterval;
+
+          var info = "freeze=" + freezeTime + ", play=" + playbackTime;
+          document.getElementById("info").innerHTML = info;
+          console.log("freeze=" + freezeTime + ", play=" + playbackTime);
+      }
+    </script>
+  </body>
+
+</html>
