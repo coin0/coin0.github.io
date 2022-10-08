@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="WebRTC code samples">
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta itemprop="description" content="Client-side WebRTC code samples">
+    <meta itemprop="image" content="../../../images/webrtc-icon-192x192.png">
+    <meta itemprop="name" content="WebRTC code samples">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta id="theme-color" name="theme-color" content="#ffffff">
+    <base target="_blank">
+    <title>Peer connection between two tabs</title>
+    <style>
+      .hidden {
+          display: none;
+      }
+
+      .highlight {
+          background-color: #eee;
+          font-size: 1.2em;
+          margin: 0 0 30px 0;
+          padding: 0.2em 1.5em;
+      }
+
+      .warning {
+          color: red;
+          font-weight: 400;
+      }
+
+      @media screen and (min-width: 1000px) {
+          /* hack! to detect non-touch devices */
+          div#links a {
+              line-height: 0.8em;
+          }
+      }
+
+      audio {
+          max-width: 100%;
+      }
+
+      body {
+          font-family: 'Roboto', sans-serif;
+          font-weight: 300;
+          margin: 0;
+          padding: 1em;
+          word-break: break-word;
+      }
+
+      button {
+          background-color: #d84a38;
+          border: none;
+          border-radius: 2px;
+          color: white;
+          font-family: 'Roboto', sans-serif;
+          font-size: 0.8em;
+          margin: 0 0 1em 0;
+          padding: 0.5em 0.7em 0.6em 0.7em;
+      }
+
+      button:active {
+          background-color: #cf402f;
+      }
+
+      button:hover {
+          background-color: #cf402f;
+      }
+
+      button[disabled] {
+          color: #ccc;
+      }
+
+      button[disabled]:hover {
+          background-color: #d84a38;
+      }
+
+      canvas {
+          background-color: #ccc;
+          max-width: 100%;
+          width: 100%;
+      }
+
+      code {
+          font-family: 'Roboto', sans-serif;
+          font-weight: 400;
+      }
+
+      div#container {
+          margin: 0 auto 0 auto;
+          max-width: 60em;
+          padding: 1em 1.5em 1.3em 1.5em;
+      }
+
+      div#links {
+          padding: 0.5em 0 0 0;
+      }
+
+      h1 {
+          border-bottom: 1px solid #ccc;
+          font-family: 'Roboto', sans-serif;
+          font-weight: 500;
+          margin: 0 0 0.8em 0;
+          padding: 0 0 0.2em 0;
+      }
+
+      h2 {
+          color: #444;
+          font-weight: 500;
+      }
+
+      h3 {
+          border-top: 1px solid #eee;
+          color: #666;
+          font-weight: 500;
+          margin: 10px 0 10px 0;
+          white-space: nowrap;
+      }
+
+      li {
+          margin: 0 0 0.4em 0;
+      }
+
+      html {
+          /* avoid annoying page width change
+  when moving from the home page */
+          overflow-y: scroll;
+      }
+
+      img {
+          border: none;
+          max-width: 100%;
+      }
+
+      input[type=radio] {
+          position: relative;
+          top: -1px;
+      }
+
+      p {
+          color: #444;
+          font-weight: 300;
+      }
+
+      p#data {
+          border-top: 1px dotted #666;
+          font-family: Courier New, monospace;
+          line-height: 1.3em;
+          max-height: 1000px;
+          overflow-y: auto;
+          padding: 1em 0 0 0;
+      }
+
+      p.borderBelow {
+          border-bottom: 1px solid #aaa;
+          padding: 0 0 20px 0;
+      }
+
+      section p:last-of-type {
+          margin: 0;
+      }
+
+      section {
+          border-bottom: 1px solid #eee;
+          margin: 0 0 30px 0;
+          padding: 0 0 20px 0;
+      }
+
+      section:last-of-type {
+          border-bottom: none;
+          padding: 0 0 1em 0;
+      }
+
+      select {
+          margin: 0 1em 1em 0;
+          position: relative;
+          top: -1px;
+      }
+
+      h1 span {
+          white-space: nowrap;
+      }
+
+      a {
+          color: #1D6EEE;
+          font-weight: 300;
+          text-decoration: none;
+      }
+
+      h1 a {
+          font-weight: 300;
+          margin: 0 10px 0 0;
+          white-space: nowrap;
+      }
+
+      a:hover {
+          color: #3d85c6;
+          text-decoration: underline;
+      }
+
+      a#viewSource {
+          display: block;
+          margin: 1.3em 0 0 0;
+          border-top: 1px solid #999;
+          padding: 1em 0 0 0;
+      }
+
+      div#errorMsg p {
+          color: #F00;
+      }
+
+      div#links a {
+          display: block;
+          line-height: 1.3em;
+          margin: 0 0 1.5em 0;
+      }
+
+      div.outputSelector {
+          margin: -1.3em 0 2em 0;
+      }
+
+      p.description {
+          margin: 0 0 0.5em 0;
+      }
+
+      strong {
+          font-weight: 500;
+      }
+
+      textarea {
+          resize: none;
+          font-family: 'Roboto', sans-serif;
+      }
+
+      video {
+          background: #222;
+          margin: 0 0 20px 0;
+          --width: 100%;
+          width: var(--width);
+          height: calc(var(--width) * 0.75);
+      }
+
+      ul {
+          margin: 0 0 0.5em 0;
+      }
+
+      @media screen and (max-width: 650px) {
+          .highlight {
+              font-size: 1em;
+              margin: 0 0 20px 0;
+              padding: 0.2em 1em;
+          }
+
+          h1 {
+              font-size: 24px;
+          }
+      }
+
+      @media screen and (max-width: 550px) {
+          button:active {
+              background-color: darkRed;
+          }
+
+          h1 {
+              font-size: 22px;
+          }
+      }
+
+      @media screen and (max-width: 450px) {
+          h1 {
+              font-size: 20px;
+          }
+      }
+
+      button {
+          margin: 0 20px 0 0;
+          width: 83px;
+      }
+
+      button#hangupButton {
+          margin: 0;
+      }
+
+      video {
+          --width: 45%;
+          width: var(--width);
+          height: calc(var(--width) * 0.75);
+          margin: 0 0 20px 0;
+          vertical-align: top;
+      }
+
+      video#localVideo {
+          margin: 0 20px 20px 0;
+      }
+
+      div.box {
+          margin: 1em;
+      }
+
+      @media screen and (max-width: 400px) {
+          button {
+              width: 83px;
+              margin: 0 11px 10px 0;
+          }
+
+          video {
+              height: 90px;
+              margin: 0 0 10px 0;
+              width: calc(50% - 7px);
+          }
+          video#localVideo {
+              margin: 0 10px 20px 0;
+          }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="container">
+      <h1><a href="//webrtc.github.io/samples/" title="WebRTC samples homepage">WebRTC samples</a>
+        <span>Peer connection</span></h1>
+
+      <p>This sample shows how to setup a connection between two peers using
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection">RTCPeerConnection</a>.
+      </p>
+
+      <video id="localVideo" playsinline autoplay muted></video>
+      <video id="remoteVideo" playsinline autoplay></video>
+
+      <div class="box">
+        <button id="startButton">Start</button>
+        <button id="callButton">Call</button>
+        <button id="hangupButton">Hang Up</button>
+      </div>
+
+    </div>
+  </body>
+
+  <script>
+    const startButton = document.getElementById('startButton');
+    const callButton = document.getElementById('callButton');
+    const hangupButton = document.getElementById('hangupButton');
+    callButton.disabled = true;
+    hangupButton.disabled = true;
+    startButton.addEventListener('click', start);
+    callButton.addEventListener('click', call);
+    hangupButton.addEventListener('click', hangup);
+
+    let startTime;
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+
+    localVideo.addEventListener('loadedmetadata', function() {
+        console.log(`Local video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
+    });
+
+    remoteVideo.addEventListener('loadedmetadata', function() {
+        console.log(`Remote video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
+    });
+
+    remoteVideo.addEventListener('resize', () => {
+        console.log(`Remote video size changed to ${remoteVideo.videoWidth}x${remoteVideo.videoHeight} - Time since pageload ${performance.now().toFixed(0)}ms`);
+        // We'll use the first onsize callback as an indication that video has started
+        // playing out.
+        if (startTime) {
+            const elapsedTime = window.performance.now() - startTime;
+            console.log('Setup time: ' + elapsedTime.toFixed(3) + 'ms');
+            startTime = null;
+        }
+    });
+
+    let localStream;
+    let pc1;
+    let pc2;
+    const offerOptions = {
+        offerToReceiveAudio: 1,
+        offerToReceiveVideo: 1
+    };
+
+    function getName(pc) {
+        return (pc === pc1) ? 'pc1' : 'pc2';
+    }
+
+    function getOtherPc(pc) {
+        return (pc === pc1) ? pc2 : pc1;
+    }
+
+    async function start() {
+        console.log('Requesting local stream');
+        startButton.disabled = true;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
+            console.log('Received local stream');
+            localVideo.srcObject = stream;
+            localStream = stream;
+            callButton.disabled = false;
+        } catch (e) {
+            alert(`getUserMedia() error: ${e.name}`);
+        }
+    }
+
+    async function call() {
+        callButton.disabled = true;
+        hangupButton.disabled = false;
+        console.log('Starting call');
+        startTime = window.performance.now();
+        const videoTracks = localStream.getVideoTracks();
+        const audioTracks = localStream.getAudioTracks();
+        if (videoTracks.length > 0) {
+            console.log(`Using video device: ${videoTracks[0].label}`);
+        }
+        if (audioTracks.length > 0) {
+            console.log(`Using audio device: ${audioTracks[0].label}`);
+        }
+
+        let turnconfig = {
+            "credential": "abc",
+            "urls": ['turn:60.191.137.122:3478?transport=tcp', 'turn:60.191.137.122:4567'],
+            "username": "root"
+        };
+        let pcconfig = {
+            "iceCandidatePoolSize": "0",
+            "iceTransportPolicy": "relay",
+            "iceServers": [turnconfig]
+        };
+
+        console.log('RTCPeerConnection configuration:', pcconfig);
+        pc1 = new RTCPeerConnection(pcconfig);
+        console.log('Created local peer connection object pc1');
+        pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
+        pc2 = new RTCPeerConnection(pcconfig);
+        console.log('Created remote peer connection object pc2');
+        pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
+        pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
+        pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc2, e));
+        pc2.addEventListener('track', gotRemoteStream);
+
+        localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
+        console.log('Added local stream to pc1');
+
+        try {
+            console.log('pc1 createOffer start');
+            const offer = await pc1.createOffer(offerOptions);
+            await onCreateOfferSuccess(offer);
+        } catch (e) {
+            onCreateSessionDescriptionError(e);
+        }
+    }
+
+    function onCreateSessionDescriptionError(error) {
+        console.log(`Failed to create session description: ${error.toString()}`);
+    }
+
+    async function onCreateOfferSuccess(desc) {
+        console.log(`Offer from pc1\n${desc.sdp}`);
+        console.log('pc1 setLocalDescription start');
+        try {
+            await pc1.setLocalDescription(desc);
+            onSetLocalSuccess(pc1);
+        } catch (e) {
+            onSetSessionDescriptionError();
+        }
+
+        console.log('pc2 setRemoteDescription start');
+        try {
+            await pc2.setRemoteDescription(desc);
+            onSetRemoteSuccess(pc2);
+        } catch (e) {
+            onSetSessionDescriptionError();
+        }
+
+        console.log('pc2 createAnswer start');
+        // Since the 'remote' side has no media stream we need
+        // to pass in the right constraints in order for it to
+        // accept the incoming offer of audio and video.
+        try {
+            const answer = await pc2.createAnswer();
+            await onCreateAnswerSuccess(answer);
+        } catch (e) {
+            onCreateSessionDescriptionError(e);
+        }
+    }
+
+    function onSetLocalSuccess(pc) {
+        console.log(`${getName(pc)} setLocalDescription complete`);
+    }
+
+    function onSetRemoteSuccess(pc) {
+        console.log(`${getName(pc)} setRemoteDescription complete`);
+    }
+
+    function onSetSessionDescriptionError(error) {
+        console.log(`Failed to set session description: ${error.toString()}`);
+    }
+
+    function gotRemoteStream(e) {
+        if (remoteVideo.srcObject !== e.streams[0]) {
+            remoteVideo.srcObject = e.streams[0];
+            console.log('pc2 received remote stream');
+        }
+    }
+
+    async function onCreateAnswerSuccess(desc) {
+        console.log(`Answer from pc2:\n${desc.sdp}`);
+        console.log('pc2 setLocalDescription start');
+        try {
+            await pc2.setLocalDescription(desc);
+            onSetLocalSuccess(pc2);
+        } catch (e) {
+            onSetSessionDescriptionError(e);
+        }
+        console.log('pc1 setRemoteDescription start');
+        try {
+            await pc1.setRemoteDescription(desc);
+            onSetRemoteSuccess(pc1);
+        } catch (e) {
+            onSetSessionDescriptionError(e);
+        }
+    }
+
+    async function onIceCandidate(pc, event) {
+        try {
+            await (getOtherPc(pc).addIceCandidate(event.candidate));
+            onAddIceCandidateSuccess(pc);
+        } catch (e) {
+            onAddIceCandidateError(pc, e);
+        }
+        console.log(`${getName(pc)} ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'}`);
+    }
+
+    function onAddIceCandidateSuccess(pc) {
+        console.log(`${getName(pc)} addIceCandidate success`);
+    }
+
+    function onAddIceCandidateError(pc, error) {
+        console.log(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
+    }
+
+    function onIceStateChange(pc, event) {
+        if (pc) {
+            console.log(`${getName(pc)} ICE state: ${pc.iceConnectionState}`);
+            console.log('ICE state change event: ', event);
+        }
+    }
+
+    function hangup() {
+        console.log('Ending call');
+        pc1.close();
+        pc2.close();
+        pc1 = null;
+        pc2 = null;
+        hangupButton.disabled = true;
+        callButton.disabled = false;
+    }
+
+  </script>
+
+</html>
