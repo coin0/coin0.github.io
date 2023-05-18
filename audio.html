@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:," />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audio Glitch</title>
+  </head>
+  <body>
+    <div>
+      <button id="start">Start</button>
+      <span id="volume"></span>
+      <audio id="player"></audio>
+    </div>
+    <script>
+const startButton = document.querySelector("#start");
+const volumeText = document.querySelector("#volume");
+const audioPlayer = document.querySelector("#player");
+startButton.onclick = async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  console.log("audio track created");
+  const context = new AudioContext();
+  const source = new MediaStreamAudioSourceNode(context, { mediaStream: stream });
+  const analyzer = new AnalyserNode(context);
+  const destination = new MediaStreamAudioDestinationNode(context);
+  source.connect(analyzer).connect(destination);
+  console.log(`audio graph created`);
+  player.srcObject = destination.stream;
+  player.play();
+  console.log("audio is playing");
+  setInterval(() => {
+    const data = new Float32Array(analyzer.fftSize);
+    analyzer.getFloatTimeDomainData(data);
+    const sumSquare = data.reduce((acc, value) => acc + value * value, 0);
+    const meanSquare = sumSquare / data.length;
+    const level = Math.min(10.0 * Math.log10(meanSquare), 0);
+    volumeText.innerText = `${level.toFixed(1)}dB`;
+  }, 1000);
+};
+      document.getElementById('start').click();
+    </script>
+  </body>
+</html>
