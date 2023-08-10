@@ -1,13 +1,13 @@
 // p2p
 
 var client;
-AgoraRTC.setParameter("P2P", true);
-init()
 var localAudioTrack, localVideoTrack;
-var videoStatsTimer, audioStatsTimer
+var initNo = randomNum(1000, 9999);
+
+AgoraRTC.setParameter("P2P", true);
+init();
 
 async function init() {
-    var initNo = randomNum(1000, 9999);
     document.getElementById('no').innerHTML = initNo.toString();
     [localAudioTrack, localVideoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
     localVideoTrack.play("localVideo");
@@ -85,6 +85,7 @@ async function subscribe(user, mediaType) {
 }
 
 function handleUserPublished(user, mediaType) {
+    answer();
     subscribe(user, mediaType);
 }
 
@@ -122,7 +123,13 @@ async function call() {
     hangupButton.disabled = false;
 }
 
-function hangup() {
+async function answer() {
+    callButton.disabled = true;
+    hangupButton.disabled = false;
+    document.getElementById('desc').innerHTML = 'reload to create a new phone number or call a number ';
+}
+
+async function hangup() {
     leave();
 
     hangupButton.disabled = true;
