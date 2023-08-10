@@ -4,6 +4,7 @@ var client;
 AgoraRTC.setParameter("P2P", true);
 init()
 var localAudioTrack, localVideoTrack;
+var videoStatsTimer, audioStatsTimer
 
 async function init() {
     var initNo = randomNum(1000, 9999);
@@ -30,8 +31,6 @@ function randomNum(minNum, maxNum) {
 }
 
 async function join(channel) {
-
-    
 
     let params = (new URL(document.location)).searchParams;
     var mode = "rtc";
@@ -113,6 +112,8 @@ callButton.addEventListener('click', call);
 hangupButton.addEventListener('click', hangup);
 
 async function call() {
+
+    document.getElementById('desc').innerHTML = 'reload to create a new phone number or call a number ';
     leave();
     await join(document.getElementById("room").value);
     await publish();
