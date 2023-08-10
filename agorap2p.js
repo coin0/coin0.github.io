@@ -2,15 +2,23 @@
 
 var client;
 var localAudioTrack, localVideoTrack;
-var initNo = randomNum(1000, 9999);
 
 AgoraRTC.setParameter("P2P", true);
-init();
+onload();
 
-async function init() {
-    document.getElementById('no').innerHTML = initNo.toString();
+async function onload() {
+    await createTracks();
+    await init();
+}
+
+async function createTracks() {
     [localAudioTrack, localVideoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
     localVideoTrack.play("localVideo");
+}
+
+async function init() {
+    var initNo = randomNum(1000, 9999);
+    document.getElementById('no').innerHTML = initNo.toString();
 
     await join(initNo.toString());
     await publish();
@@ -114,7 +122,7 @@ hangupButton.addEventListener('click', hangup);
 
 async function call() {
 
-    document.getElementById('desc').innerHTML = 'reload to create a new phone number or call a number ';
+    document.getElementById('desc').innerHTML = 'hangup or call a number ';
     leave();
     await join(document.getElementById("room").value);
     await publish();
@@ -126,11 +134,12 @@ async function call() {
 async function answer() {
     callButton.disabled = true;
     hangupButton.disabled = false;
-    document.getElementById('desc').innerHTML = 'reload to create a new phone number or call a number ';
 }
 
 async function hangup() {
+    document.getElementById('desc').innerHTML = 'Your phone number is <b id="no"></b> or call a number &nbsp;';
     leave();
+    init();
 
     hangupButton.disabled = true;
     callButton.disabled = false;
