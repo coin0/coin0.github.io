@@ -15,7 +15,7 @@ async function createTracks() {
     [localAudioTrack, localVideoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
         undefined,
         {
-            encoderConfig: {frameRate: 30, bitrateMax: 2000, width: 1270, height: 720}, optimizationMode:"motion"
+            encoderConfig: {frameRate: 30, bitrateMax: 2000, width: 1280, height: 720}, optimizationMode:"motion"
         });
     localVideoTrack.play("localVideo");
 }
