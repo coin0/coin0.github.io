@@ -59,7 +59,7 @@ async function join(channel) {
         channel = "p2p_demo";
     }
 
-    client = AgoraRTC.createClient({mode: mode, codec: "vp8"});
+    client = AgoraRTC.createClient({mode: mode, codec: "vp9"});
     rtcOptions = {};
     rtcOptions.appid = appid;
     rtcOptions.channel = channel;
