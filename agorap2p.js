@@ -128,7 +128,7 @@ async function subscribe(user, mediaType, renderID, client) {
                 }
                 document.getElementById(renderID + "Stats").innerHTML = output;
             },
-            3000,
+            1000,
         );
 
         if (renderID === 'remoteVideo') {
