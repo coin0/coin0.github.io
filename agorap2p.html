@@ -324,8 +324,34 @@
         <a href="https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection">RTCPeerConnection</a>.
       </p>
 
-      <video id="localVideo" playsinline autoplay muted></video>
-      <video id="remoteVideo" playsinline autoplay></video>
+      <table border="0" style="margin:auto">
+        <tr><td><b>local video</b></td></tr>
+        <tr>
+          <td style="text-align:center;">
+            <video id="localVideo" playsinline autoplay muted></video>
+          </td>
+        </tr>
+      </table>
+
+      <p><b>remote video</b></p>
+      <table border="0" style="width:100%">
+        <tr>
+          <td style="text-align:left;width:50%;font-size:12px;">
+            P2P over internet <br>
+          </td>
+          <td style="text-align:left;width:50%;font-size:12px;">
+            SD-RTN <br>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <video id="remoteVideo" style="width:90%" playsinline autoplay></video>
+          </td>
+          <td>
+            <video id="remoteVideo2" style="width:90%" playsinline autoplay></video>
+          </td>
+        </tr>
+      </table>
 
       <div class="box">
         <span id="desc">Your phone number is <b id="no"></b> or call a number &nbsp;</span>

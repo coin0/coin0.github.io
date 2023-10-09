@@ -1,6 +1,7 @@
 // p2p
 
-var client;
+var clientP2P;
+var clientRTN;
 var localAudioTrack, localVideoTrack;
 
 AgoraRTC.setParameter("P2P", true);
@@ -45,8 +46,9 @@ function randomNum(minNum, maxNum) {
 async function join(channel) {
 
     let params = (new URL(document.location)).searchParams;
-    var mode = "rtc";
+    var mode = "p2p";
     var appid = ""
+    let p2puid, rtnuid;
 
     if (!params.get("appid")) {
         window.alert("please fill appid in url params");
@@ -59,7 +61,24 @@ async function join(channel) {
         channel = "p2p_demo";
     }
 
-    client = AgoraRTC.createClient({mode: mode, codec: "vp9"});
+    AgoraRTC.setParameter("WEBCS_DOMAIN", [
+        "http.ap.staging-1-aws.myagoralab.com",
+        "http.ap.staging-1-ali.myagoralab.com",
+    ]);
+    AgoraRTC.setParameter("WEBCS_DOMAIN_BACKUP_LIST", [
+        "http.ap.staging-1-aws.myagoralab.com",
+        "http.ap.staging-1-ali.myagoralab.com",
+    ]);
+    AgoraRTC.setParameter("GATEWAY_ADDRESS", [{"ip":"101.96.145.71","port":18888}]);
+    AgoraRTC.setParameter("AP_AREA", false);
+    AgoraRTC.setParameter("TURN_DOMAIN", "edge.staging-1-aws.myagoralab.com");
+
+    clientP2P = AgoraRTC.createClient({mode: mode, codec: "vp9", role: "host"});
+    clientRTN = AgoraRTC.createClient({mode: mode, codec: "vp9", role: "host"});
+
+    clientP2P.setP2PTransport("default");
+    clientRTN.setP2PTransport("sd-rtn");
+
     rtcOptions = {};
     rtcOptions.appid = appid;
     rtcOptions.channel = channel;
@@ -67,18 +86,25 @@ async function join(channel) {
     for (const key in rtcOptions)
         console.log("[webapp] rtc options:" + key + " => " + rtcOptions[key] + " (" + typeof(rtcOptions[key]) + ")");
     // add event listener to play remote tracks when remote user publishs.
-    client.on("user-published", handleUserPublished);
-    client.on("user-unpublished", handleUserUnpublished);
-    client.on("user-joined", handleUserJoined);
+    clientP2P.on("user-published", handleUserPublished);
+    clientP2P.on("user-unpublished", handleUserUnpublished);
+    clientP2P.on("user-joined", handleUserJoined);
+
+    clientRTN.on("user-published", handleUserPublishedRTN);
+    clientRTN.on("user-unpublished", handleUserUnpublished);
+    clientRTN.on("user-joined", handleUserJoined);
+
     try {
-        rtcOptions.uid = await client.join(rtcOptions.appid, rtcOptions.channel, rtcOptions.token || null, rtcOptions.uid || null);
+        p2puid = await clientP2P.join(rtcOptions.appid, rtcOptions.channel, rtcOptions.token || null, rtcOptions.uid || null);
+        rtnuid = await clientRTN.join(rtcOptions.appid, rtcOptions.channel + "_rtn", rtcOptions.token || null, rtcOptions.uid || null);
     } catch (e) {
         console.error("[webapp] join() failed, reason: " + e);
     }
-    console.log("[webapp] join channel with uid=" + rtcOptions.uid + " (" + typeof(rtcOptions.uid) + ")");
+    console.log("[webapp] join channel " + rtcOptions.channel + "with uid=" + p2puid + " (" + typeof(p2puid) + ")");
+    console.log("[webapp] join channel " + rtcOptions.channel + "_rtn with uid=" + rtnuid + " (" + typeof(rtnuid) + ")");
 }
 
-async function subscribe(user, mediaType) {
+async function subscribe(user, mediaType, renderID, client) {
     const uid = user.uid;
 
     // subscribe to a remote user
@@ -89,16 +115,21 @@ async function subscribe(user, mediaType) {
     }
 
     if (mediaType === 'video') {
-        user.videoTrack.play('remoteVideo');
+        user.videoTrack.play(renderID);
     }
     if (mediaType === 'audio') {
         user.audioTrack.play();
     }
 }
 
-function handleUserPublished(user, mediaType) {
+function handleUserPublished(user, mediaType, renderID) {
     answer();
-    subscribe(user, mediaType);
+    subscribe(user, mediaType, 'remoteVideo', clientP2P);
+}
+
+function handleUserPublishedRTN(user, mediaType, renderID) {
+    answer();
+    subscribe(user, mediaType, 'remoteVideo2', clientRTN);
 }
 
 function handleUserUnpublished(user, mediaType) {
@@ -108,11 +139,13 @@ function handleUserJoined(user) {
 }
 
 async function publish() {
-    await client.publish([localVideoTrack, localAudioTrack]);
+    await clientP2P.publish([localVideoTrack]);
+    await clientRTN.publish([localVideoTrack]);
 }
 
 function leave() {
-    client.leave();
+    clientP2P.leave();
+    clientRTN.leave();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
