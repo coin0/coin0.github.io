@@ -2,6 +2,9 @@
 
 var clientP2P;
 var clientRTN;
+var clientP2PTimer;
+var clientRTNTimer;
+
 var localAudioTrack, localVideoTrack;
 
 AgoraRTC.setParameter("P2P", true);
@@ -116,6 +119,23 @@ async function subscribe(user, mediaType, renderID, client) {
 
     if (mediaType === 'video') {
         user.videoTrack.play(renderID);
+
+        let timer = setInterval(
+            () => {
+                let output = "";
+                for (const [key, value] of Object.entries(user.videoTrack.getStats())) {
+                    output += `${key}: ${value} <br>`;
+                }
+                document.getElementById(renderID + "Stats").innerHTML = output;
+            },
+            3000,
+        );
+
+        if (renderID === 'remoteVideo') {
+            clientP2PTimer = timer;
+        } else {
+            clientRTNTimer = timer;
+        }
     }
     if (mediaType === 'audio') {
         user.audioTrack.play();
@@ -144,6 +164,11 @@ async function publish() {
 }
 
 function leave() {
+    clearInterval(clientP2PTimer);
+    clearInterval(clientRTNTimer);
+    document.getElementById("remoteVideoStats").innerHTML = "";
+    document.getElementById("remoteVideo2Stats").innerHTML = "";
+
     clientP2P.leave();
     clientRTN.leave();
 }
