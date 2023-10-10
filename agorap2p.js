@@ -64,6 +64,7 @@ async function join(channel) {
         channel = "p2p_demo";
     }
 
+    /*
     AgoraRTC.setParameter("WEBCS_DOMAIN", [
         "http.ap.staging-1-aws.myagoralab.com",
         "http.ap.staging-1-ali.myagoralab.com",
@@ -73,8 +74,9 @@ async function join(channel) {
         "http.ap.staging-1-ali.myagoralab.com",
     ]);
     AgoraRTC.setParameter("GATEWAY_ADDRESS", [{"ip":"101.96.145.71","port":18888}]);
-    AgoraRTC.setParameter("AP_AREA", false);
     AgoraRTC.setParameter("TURN_DOMAIN", "edge.staging-1-aws.myagoralab.com");
+    */
+    AgoraRTC.setParameter("AP_AREA", false);
 
     clientP2P = AgoraRTC.createClient({mode: mode, codec: "vp9", role: "host"});
     clientRTN = AgoraRTC.createClient({mode: mode, codec: "vp9", role: "host"});
