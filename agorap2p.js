@@ -98,13 +98,16 @@ async function join(channel) {
     clientRTN.on("user-joined", handleUserJoined);
 
     try {
-        p2puid = await clientP2P.join(rtcOptions.appid, rtcOptions.channel, rtcOptions.token || null, rtcOptions.uid || null);
-        rtnuid = await clientRTN.join(rtcOptions.appid, rtcOptions.channel + "_rtn", rtcOptions.token || null, rtcOptions.uid || null);
+        //p2puid = await clientP2P.join(rtcOptions.appid, rtcOptions.channel, rtcOptions.token || null, rtcOptions.uid || null);
+        //rtnuid = await clientRTN.join(rtcOptions.appid, rtcOptions.channel + "_rtn", rtcOptions.token || null, rtcOptions.uid || null);
+        await Promise.all([clientP2P.join(rtcOptions.appid, rtcOptions.channel, rtcOptions.token || null, null),
+                           clientRTN.join(rtcOptions.appid, rtcOptions.channel + "_rtn", rtcOptions.token || null, null)])
+            .then((values) => {});
     } catch (e) {
         console.error("[webapp] join() failed, reason: " + e);
     }
-    console.log("[webapp] join channel " + rtcOptions.channel + "with uid=" + p2puid + " (" + typeof(p2puid) + ")");
-    console.log("[webapp] join channel " + rtcOptions.channel + "_rtn with uid=" + rtnuid + " (" + typeof(rtnuid) + ")");
+    //console.log("[webapp] join channel " + rtcOptions.channel + "with uid=" + p2puid + " (" + typeof(p2puid) + ")");
+    //console.log("[webapp] join channel " + rtcOptions.channel + "_rtn with uid=" + rtnuid + " (" + typeof(rtnuid) + ")");
 }
 
 async function subscribe(user, mediaType, renderID, client) {
