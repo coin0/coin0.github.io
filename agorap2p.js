@@ -72,18 +72,6 @@ async function join(channel) {
         channel = "p2p_demo";
     }
 
-    /*
-    AgoraRTC.setParameter("WEBCS_DOMAIN", [
-        "http.ap.staging-1-aws.myagoralab.com",
-        "http.ap.staging-1-ali.myagoralab.com",
-    ]);
-    AgoraRTC.setParameter("WEBCS_DOMAIN_BACKUP_LIST", [
-        "http.ap.staging-1-aws.myagoralab.com",
-        "http.ap.staging-1-ali.myagoralab.com",
-    ]);
-    AgoraRTC.setParameter("GATEWAY_ADDRESS", [{"ip":"101.96.145.71","port":18888}]);
-    AgoraRTC.setParameter("TURN_DOMAIN", "edge.staging-1-aws.myagoralab.com");
-    */
     AgoraRTC.setParameter("AP_AREA", false);
 
     clientP2P = AgoraRTC.createClient({mode: mode, codec: "vp9", role: "host"});
@@ -98,7 +86,7 @@ async function join(channel) {
 
     for (const key in rtcOptions)
         console.log("[webapp] rtc options:" + key + " => " + rtcOptions[key] + " (" + typeof(rtcOptions[key]) + ")");
-    // add event listener to play remote tracks when remote user publishs.
+
     clientP2P.on("user-published", handleUserPublished);
     clientP2P.on("user-unpublished", handleUserUnpublished);
     clientP2P.on("user-joined", handleUserJoined);
@@ -108,16 +96,12 @@ async function join(channel) {
     clientRTN.on("user-joined", handleUserJoined);
 
     try {
-        //p2puid = await clientP2P.join(rtcOptions.appid, rtcOptions.channel, rtcOptions.token || null, rtcOptions.uid || null);
-        //rtnuid = await clientRTN.join(rtcOptions.appid, rtcOptions.channel + "_rtn", rtcOptions.token || null, rtcOptions.uid || null);
         await Promise.all([clientP2P.join(rtcOptions.appid, rtcOptions.channel, rtcOptions.token || null, null),
                            clientRTN.join(rtcOptions.appid, rtcOptions.channel + "_rtn", rtcOptions.token || null, null)])
             .then((values) => {});
     } catch (e) {
         console.error("[webapp] join() failed, reason: " + e);
     }
-    //console.log("[webapp] join channel " + rtcOptions.channel + "with uid=" + p2puid + " (" + typeof(p2puid) + ")");
-    //console.log("[webapp] join channel " + rtcOptions.channel + "_rtn with uid=" + rtnuid + " (" + typeof(rtnuid) + ")");
 }
 
 async function subscribe(user, mediaType, renderID, client) {
