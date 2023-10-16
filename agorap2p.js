@@ -25,6 +25,14 @@ async function createTracks() {
 }
 
 async function init() {
+    let params = (new URL(document.location)).searchParams;
+    if (!!params.get("call")) {
+        console.log("call " + params.get("call"));
+        document.getElementById("room").value = params.get("call");
+        await call();
+        return;
+    }
+
     var initNo = randomNum(1000, 9999);
     document.getElementById('no').innerHTML = initNo.toString();
 
@@ -174,8 +182,10 @@ function leave() {
     document.getElementById("remoteVideoStats").innerHTML = "";
     document.getElementById("remoteVideo2Stats").innerHTML = "";
 
-    clientP2P.leave();
-    clientRTN.leave();
+    if (clientP2P != undefined)
+        clientP2P.leave();
+    if (clientRTN != undefined)
+        clientRTN.leave();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
