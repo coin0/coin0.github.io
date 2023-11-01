@@ -324,7 +324,7 @@
         <a href="https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection">RTCPeerConnection</a>.
       </p>
 
-      <table border="0" style="margin:auto">
+      <table border="0" style="margin:auto" class="video-box">
         <tr><td><b>local video</b></td></tr>
         <tr>
           <td style="text-align:center;">
@@ -335,7 +335,7 @@
 
       <p><b>remote video</b></p>
       <table border="0" style="width:100%">
-        <tr>
+        <tr class="video-box">
           <td style="text-align:left;width:50%;">
             P2P over internet <br>
           </td>
@@ -343,7 +343,7 @@
             SD-RTN <br>
           </td>
         </tr>
-        <tr>
+        <tr class="video-box">
           <td>
             <video id="remoteVideo" style="width:90%" playsinline autoplay></video>
           </td>
@@ -351,12 +351,17 @@
             <video id="remoteVideo2" style="width:90%" playsinline autoplay></video>
           </td>
         </tr>
-        <tr>
+        <tr class="video-box">
           <td>
-            <div id="remoteVideoStats"></div>
+            <div id="remoteVideoStats" style="font-size:12px;"></div>
           </td>
           <td>
-            <div id="remoteVideo2Stats"></div>
+            <div id="remoteVideo2Stats" style="font-size:12px;"></div>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2">
+            
           </td>
         </tr>
       </table>
@@ -372,6 +377,7 @@
     </div>
   </body>
   <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js" integrity="sha512-7U4rRB8aGAHGVad3u2jiC7GA5/1YhQcQjxKeaVms/bT66i3LVBMRcBI9KwABNWnxOSwulkuSXxZLGuyfvo7V1A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
     // VConsole will be exported to `window.VConsole` by default.
     var vConsole = new window.VConsole();

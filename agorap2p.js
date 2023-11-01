@@ -26,6 +26,15 @@ async function createTracks() {
 
 async function init() {
     let params = (new URL(document.location)).searchParams;
+    if (!!params.get("type")) {
+        console.log("m " + params.get("type"));
+        if (params.get("type") == "charts") {
+            Array.from(document.getElementsByClassName("video-box")).forEach((el) => {
+                el.style.display = "none";
+            });
+            document.getElementById("container").style.maxWidth = "100%";
+        }
+    }
     if (!!params.get("call")) {
         console.log("call " + params.get("call"));
         document.getElementById("room").value = params.get("call");
@@ -77,6 +86,11 @@ async function join(channel) {
     clientP2P = AgoraRTC.createClient({mode: mode, codec: "vp9", role: "host"});
     clientRTN = AgoraRTC.createClient({mode: mode, codec: "vp9", role: "host"});
 
+    clientP2P.timerTriggers = 0;
+    clientRTN.timerTriggers = 0;
+    clientP2P.name = "p2p";
+    clientRTN.name = "rtn";
+
     clientP2P.setP2PTransport("default");
     clientRTN.setP2PTransport("sd-rtn");
 
@@ -119,13 +133,43 @@ async function subscribe(user, mediaType, renderID, client) {
 
         let timer = setInterval(
             () => {
-                let output = "";
-                for (const [key, value] of Object.entries(user.videoTrack.getStats())) {
-                    output += `${key}: ${value} <br>`;
-                }
-                document.getElementById(renderID + "Stats").innerHTML = output;
+                client.timerTriggers++;
+
+                if (client._p2pChannel.recvConnection == undefined ||
+                    client._p2pChannel.sendConnection == undefined)
+                    return;
+
+                Promise.all([client._p2pChannel.recvConnection.peerConnection.getStats(),
+                             client._p2pChannel.sendConnection.peerConnection.getStats()])
+                    .then((values) => {
+                        let output = "";
+
+                        let inbound = "------------------<br>";
+                        [...values[0].entries()].forEach((e) => {
+                            if (e.length > 1 && e[1].type == "inbound-rtp") {
+                                for (const [key, value] of Object.entries(e[1])) {
+                                    inbound += `${key}: ${value} <br>`;
+                                    draw(client, "in", key, value);
+                                }
+                            }
+                        })
+                        output += inbound;
+
+                        let outbound = "-------------------<br>";
+                        [...values[1].entries()].forEach((e) => {
+                            if (e.length > 1 && e[1].type == "outbound-rtp" && e[1].mid == 2) {
+                                for (const [key, value] of Object.entries(e[1])) {
+                                    outbound += `${key}: ${value} <br>`;
+                                    draw(client, "out", key, value);
+                                }
+                            }
+                        })
+                        output += "<br>" + outbound;
+
+                        document.getElementById(renderID + "Stats").innerHTML = output;
+                    });
             },
-            1000,
+            250,
         );
 
         if (renderID === 'remoteVideo') {
@@ -204,6 +248,13 @@ async function hangup() {
 
     hangupButton.disabled = true;
     callButton.disabled = false;
+}
+
+async function draw(client, direction, key, val) {
+    if (client.timerTriggers % 4 != 0) return;
+
+    //if (key == "jitter" && direction == "in")
+    //console.log(client.timerTriggers);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
