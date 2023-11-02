@@ -4,6 +4,8 @@ var clientRTN;
 var clientP2PTimer;
 var clientRTNTimer;
 
+var botmode = false;
+
 var localAudioTrack, localVideoTrack;
 
 AgoraRTC.setParameter("P2P", true);
