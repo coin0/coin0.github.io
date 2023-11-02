@@ -13,6 +13,8 @@ async function onload() {
     await createTracks();
     await init();
 
+    if (botmode) return;
+
     dataset = { time: [], data: [] };
     dataset.data["rtn"] = {}
     dataset.data["p2p"] = {}
@@ -195,6 +197,14 @@ async function init() {
                 el.style.display = "none";
             });
             document.getElementById("container").style.maxWidth = "100%";
+        } else if (params.get("type") == "bot") {
+            Array.from(document.getElementsByTagName("canvas")).forEach((el) => {
+                el.style.display = "none";
+            });
+            Array.from(document.getElementsByClassName("vc-switch")).forEach((el) => {
+                el.dispatchEvent(new Event('click'));
+            });
+            botmode = true;
         }
     }
     if (!!params.get("call")) {
@@ -294,6 +304,8 @@ async function subscribe(user, mediaType, renderID, client) {
 
     if (mediaType === 'video') {
         user.videoTrack.play(renderID);
+
+        if (botmode) return;
 
         let timer = setInterval(
             () => {
