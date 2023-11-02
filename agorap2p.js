@@ -1,5 +1,4 @@
 // p2p
-
 var clientP2P;
 var clientRTN;
 var clientP2PTimer;
@@ -13,13 +12,176 @@ onload();
 async function onload() {
     await createTracks();
     await init();
+
+    dataset = { time: [], data: [] };
+    dataset.data["rtn"] = {}
+    dataset.data["p2p"] = {}
+    initCharts();
+    setInterval(() => {
+        var d = new Date();
+        dataset.time.push(d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds());
+
+        addJitter(dataset.data.rtn["chart_in_jitter"], clientRTN.stats["in"]["jitter"]);
+        addJitter(dataset.data.p2p["chart_in_jitter"], clientP2P.stats["in"]["jitter"]);
+        jitterChart.update();
+
+        addJB(dataset.data.rtn["chart_in_jb"], clientRTN.stats["in"]["jitterBufferDelay"],
+              clientRTN.stats["in"]["jitterBufferEmittedCount"]);
+        addJB(dataset.data.p2p["chart_in_jb"], clientP2P.stats["in"]["jitterBufferDelay"],
+              clientP2P.stats["in"]["jitterBufferEmittedCount"]);
+        jbChart.update();
+
+        addBitrate(dataset.data.rtn["chart_in_kbps"], clientRTN.stats["in"]["bytesReceived"]);
+        addBitrate(dataset.data.p2p["chart_in_kbps"], clientP2P.stats["in"]["bytesReceived"]);
+        inkbpsChart.update();
+
+        addBitrate(dataset.data.rtn["chart_out_kbps"], clientRTN.stats["out"]["bytesSent"]);
+        addBitrate(dataset.data.p2p["chart_out_kbps"], clientP2P.stats["out"]["bytesSent"]);
+        outkbpsChart.update();
+
+        addNack(dataset.data.rtn["chart_in_nack"], clientRTN.stats["in"]["nackCount"]);
+        addNack(dataset.data.p2p["chart_in_nack"], clientP2P.stats["in"]["nackCount"]);
+        innackChart.update();
+
+        addNack(dataset.data.rtn["chart_out_nack"], clientRTN.stats["out"]["nackCount"]);
+        addNack(dataset.data.p2p["chart_out_nack"], clientP2P.stats["out"]["nackCount"]);
+        outnackChart.update();
+
+        addNack(dataset.data.rtn["chart_in_fps"], clientRTN.stats["in"]["framesReceived"]);
+        addNack(dataset.data.p2p["chart_in_fps"], clientP2P.stats["in"]["framesReceived"]);
+        infpsChart.update();
+
+        addNack(dataset.data.rtn["chart_out_fps"], clientRTN.stats["out"]["framesSent"]);
+        addNack(dataset.data.p2p["chart_out_fps"], clientP2P.stats["out"]["framesSent"]);
+        outfpsChart.update();
+
+        addResolution(dataset.data.rtn["chart_out_width"], clientRTN.stats["out"]["frameWidth"]);
+        addResolution(dataset.data.p2p["chart_out_width"], clientP2P.stats["out"]["frameWidth"]);
+        widthChart.update();
+
+        addResolution(dataset.data.rtn["chart_out_height"], clientRTN.stats["out"]["frameHeight"]);
+        addResolution(dataset.data.p2p["chart_out_height"], clientP2P.stats["out"]["frameHeight"]);
+        heightChart.update();
+
+        addLoss(dataset.data.rtn["chart_in_loss"], clientRTN.stats["in"]["packetsLost"], clientRTN.stats["in"]["packetsReceived"]);
+        addLoss(dataset.data.p2p["chart_in_loss"], clientP2P.stats["in"]["packetsLost"], clientP2P.stats["in"]["packetsReceived"]);
+        lossChart.update();
+
+        addRtt(dataset.data.rtn["chart_in_rtt"], clientRTN.stats["in"]["totalRoundTripTime"],
+               clientRTN.stats["in"]["roundTripTimeMeasurements"]);
+        addRtt(dataset.data.p2p["chart_in_rtt"], clientP2P.stats["in"]["totalRoundTripTime"],
+               clientP2P.stats["in"]["roundTripTimeMeasurements"]);
+        rttChart.update();
+
+    }, 10 * 1000);
+}
+
+function addJitter(data, samples) {
+    // convert to milliseconds
+    if (data == undefined || samples == undefined) return;
+    data.push(Math.trunc(samples.reduce((a, b) => a + b.val * 1000, 0) / samples.length));
+    samples.length = 0;
+}
+
+function addJB(data, delay, count) {
+    if (data == undefined || delay == undefined || count == undefined) return;
+    data.push(Math.trunc((delay[delay.length - 1].val - delay[0].val) * 1000) / (count[count.length - 1].val - count[0].val));
+    delay.length = 0;
+    count.length = 0;
+}
+
+function addBitrate(data, samples) {
+    if (data == undefined || samples == undefined) return;
+    data.push(Math.trunc(
+        (samples[samples.length - 1].val - samples[0].val) * 8 / (samples[samples.length - 1].time - samples[0].time)));
+    samples.length = 0;
+}
+
+function addNack(data, samples) {
+    if (data == undefined || samples == undefined) return;
+    data.push(Math.trunc(
+        (samples[samples.length - 1].val - samples[0].val) * 1000 / (samples[samples.length - 1].time - samples[0].time)));
+    samples.length = 0;
+}
+
+function addFps(data, samples) {
+    // in the same calc
+    addNack(data, samples);
+}
+
+function addResolution(data, samples) {
+    if (data == undefined || samples == undefined) return;
+    data.push(samples[samples.length - 1].val);
+    samples.length = 0;
+}
+
+function addLoss(data, lost, sum) {
+    if (data == undefined || lost == undefined || sum == undefined) return;
+    data.push(1.0 * Math.max(lost[lost.length - 1].val - lost[0].val, 0) / (sum[sum.length - 1].val - sum[0].val));
+    lost.length = 0;
+    sum.length = 0;
+}
+
+function addRtt(data, total, times) {
+    if (data == undefined || total == undefined || times == undefined) return;
+    data.push(Math.trunc((total[total.length - 1].val - total[0].val) * 1000 / (times[times.length - 1].val - times[0].val)));
+    total.length = 0;
+    times.length = 0;
+}
+
+function initCharts() {
+    let create = (id, title, time, rtn, p2p) => {
+        rtn[id] = [];
+        p2p[id] = [];
+
+        return new Chart(
+            document.getElementById(id),
+            {
+                type: 'line',
+                data: {
+                    labels: time,
+                    datasets: [
+                        { label: 'rtn', data: rtn[id] },
+                        { label: 'internet', data: p2p[id] }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    elements: { point: {pointStyle: false} },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: title
+                        },
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        );
+    };
+
+    jitterChart = create("chart_in_jitter", "jitter(ms)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    jbChart = create('chart_in_jb', "jitter buffer delay(ms)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    inkbpsChart = create("chart_in_kbps", "inbound bitrate(kbps)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    innackChart = create("chart_in_nack", "nack sent", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    lossChart = create("chart_in_loss", "loss ratio(%)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    infpsChart = create("chart_in_fps", "inbound fps", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    rttChart = create("chart_in_rtt", "round trip time(ms)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    widthChart = create("chart_out_width", "sending resolution width(px)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    heightChart = create("chart_out_height", "sending resolution height(px)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    outfpsChart = create("chart_out_fps", "outbound fps", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    outnackChart = create("chart_out_nack", "nack received", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    outkbpsChart = create("chart_out_kbps", "outbound bitrate(kbps)", dataset.time, dataset.data.rtn, dataset.data.p2p);
 }
 
 async function createTracks() {
     [localAudioTrack, localVideoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks(
         undefined,
         {
-            encoderConfig: {frameRate: 30, bitrateMax: 2000, width: 1280, height: 720}, optimizationMode:"motion"
+            encoderConfig: {frameRate: 30, bitrateMax: 1000, width: 1280, height: 720}, optimizationMode:"motion"
         });
     localVideoTrack.play("localVideo");
 }
@@ -90,6 +252,8 @@ async function join(channel) {
     clientRTN.timerTriggers = 0;
     clientP2P.name = "p2p";
     clientRTN.name = "rtn";
+    clientP2P.stats = { "in": {}, "out": {} };
+    clientRTN.stats = { "in": {}, "out": {} };
 
     clientP2P.setP2PTransport("default");
     clientRTN.setP2PTransport("sd-rtn");
@@ -149,18 +313,29 @@ async function subscribe(user, mediaType, renderID, client) {
                             if (e.length > 1 && e[1].type == "inbound-rtp") {
                                 for (const [key, value] of Object.entries(e[1])) {
                                     inbound += `${key}: ${value} <br>`;
-                                    draw(client, "in", key, value);
+                                    report(client, "in", key, value, e[1].timestamp);
                                 }
                             }
                         })
                         output += inbound;
+
+                        let remoteOut = "-------------------<br>";
+                        [...values[1].entries()].forEach((e) => {
+                            if (e.length > 1 && e[1].type == "remote-inbound-rtp") {
+                                for (const [key, value] of Object.entries(e[1])) {
+                                    remoteOut += `${key}: ${value} <br>`;
+                                    report(client, "in", key, value, e[1].timestamp);
+                                }
+                            }
+                        })
+                        output += remoteOut;
 
                         let outbound = "-------------------<br>";
                         [...values[1].entries()].forEach((e) => {
                             if (e.length > 1 && e[1].type == "outbound-rtp" && e[1].mid == 2) {
                                 for (const [key, value] of Object.entries(e[1])) {
                                     outbound += `${key}: ${value} <br>`;
-                                    draw(client, "out", key, value);
+                                    report(client, "out", key, value, e[1].timestamp);
                                 }
                             }
                         })
@@ -250,11 +425,22 @@ async function hangup() {
     callButton.disabled = false;
 }
 
-async function draw(client, direction, key, val) {
-    if (client.timerTriggers % 4 != 0) return;
-
-    //if (key == "jitter" && direction == "in")
-    //console.log(client.timerTriggers);
+async function report(client, direction, key, val, ts) {
+    if (key == "jitter" ||
+        key == "jitterBufferDelay" || key == "jitterBufferEmittedCount" ||
+        key == "bytesReceived"||
+        key == "nackCount" ||
+        key == "packetsLost" || key == "packetsReceived" ||
+        key == "framesReceived" ||
+        key == "frameHeight" || key == "frameWidth" ||
+        key == "framesSent" ||
+        key == "bytesSent" ||
+        key == "totalRoundTripTime" || key == "roundTripTimeMeasurements"
+       ) {
+        if (client.stats[direction][key] == undefined)
+            client.stats[direction][key] = [];
+        client.stats[direction][key].push({val: val, time: ts});
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

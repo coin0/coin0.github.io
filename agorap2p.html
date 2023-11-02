@@ -312,15 +312,23 @@
               margin: 0 10px 20px 0;
           }
       }
+
+      canvas {
+          max-width:30%;
+          max-height:200px;
+          background-color:#ffffff;
+          float:left;
+          margin-right: 10px;
+      }
     </style>
   </head>
 
   <body>
     <div id="container">
       <h1><a href="//webrtc.github.io/samples/" title="WebRTC samples homepage">WebRTC samples</a>
-        <span>Peer connection</span></h1>
+        <span>Agora SD-RTN vs Public Internet</span></h1>
 
-      <p>This sample shows how to setup a connection between two peers using
+      <p class="video-box">This sample shows how to setup a connection between two peers using
         <a href="https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection">RTCPeerConnection</a>.
       </p>
 
@@ -333,7 +341,7 @@
         </tr>
       </table>
 
-      <p><b>remote video</b></p>
+      <p class="video-box"><b>remote video</b></p>
       <table border="0" style="width:100%">
         <tr class="video-box">
           <td style="text-align:left;width:50%;">
@@ -361,7 +369,18 @@
         </tr>
         <tr>
           <td colspan="2">
-            
+            <canvas id="chart_in_jitter"></canvas>
+            <canvas id="chart_in_jb"></canvas>
+            <canvas id="chart_in_kbps"></canvas>
+            <canvas id="chart_in_nack"></canvas>
+            <canvas id="chart_in_loss"></canvas>
+            <canvas id="chart_in_fps"></canvas>
+            <canvas id="chart_in_rtt"></canvas>
+            <canvas id="chart_out_width"></canvas>
+            <canvas id="chart_out_height"></canvas>
+            <canvas id="chart_out_fps"></canvas>
+            <canvas id="chart_out_nack"></canvas>
+            <canvas id="chart_out_kbps"></canvas>
           </td>
         </tr>
       </table>
@@ -376,8 +395,8 @@
 
     </div>
   </body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js" integrity="sha512-6HrPqAvK+lZElIZ4mZ64fyxIBTsaX5zAFZg2V/2WT+iKPrFzTzvx6QAsLW2OaLwobhMYBog/+bvmIEEGXi0p1w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js" integrity="sha512-7U4rRB8aGAHGVad3u2jiC7GA5/1YhQcQjxKeaVms/bT66i3LVBMRcBI9KwABNWnxOSwulkuSXxZLGuyfvo7V1A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
     // VConsole will be exported to `window.VConsole` by default.
     var vConsole = new window.VConsole();
