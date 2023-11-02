@@ -201,9 +201,6 @@ async function init() {
             Array.from(document.getElementsByTagName("canvas")).forEach((el) => {
                 el.style.display = "none";
             });
-            Array.from(document.getElementsByClassName("vc-switch")).forEach((el) => {
-                el.dispatchEvent(new Event('click'));
-            });
             botmode = true;
         }
     }
