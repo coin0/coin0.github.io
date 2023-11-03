@@ -348,7 +348,7 @@ async function subscribe(user, mediaType, renderID, client) {
 
                         let outbound = "-------------------<br>";
                         [...values[1].entries()].forEach((e) => {
-                            if (e.length > 1 && e[1].type == "outbound-rtp" && e[1].mid == 2) {
+                            if (e.length > 1 && e[1].type == "outbound-rtp" && e[1].frameHeight > 0) {
                                 for (const [key, value] of Object.entries(e[1])) {
                                     outbound += `${key}: ${value} <br>`;
                                     report(client, "out", key, value, e[1].timestamp);
