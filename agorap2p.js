@@ -5,6 +5,7 @@ var clientP2PTimer;
 var clientRTNTimer;
 
 var botmode = false;
+var drawInterval = 10; // seconds
 
 var localAudioTrack, localVideoTrack;
 
@@ -77,7 +78,7 @@ async function onload() {
                clientP2P.stats["in"]["roundTripTimeMeasurements"]);
         rttChart.update();
 
-    }, 10 * 1000);
+    }, drawInterval * 1000);
 }
 
 function addJitter(data, samples) {
@@ -103,8 +104,8 @@ function addBitrate(data, samples) {
 
 function addNack(data, samples) {
     if (data == undefined || samples == undefined) return;
-    data.push(Math.trunc(
-        (samples[samples.length - 1].val - samples[0].val) * 1000 / (samples[samples.length - 1].time - samples[0].time)));
+    data.push(Math.max(0, Math.trunc(
+        (samples[samples.length - 1].val - samples[0].val) * 1000 / (samples[samples.length - 1].time - samples[0].time))));
     samples.length = 0;
 }
 
@@ -128,7 +129,8 @@ function addLoss(data, lost, sum) {
 
 function addRtt(data, total, times) {
     if (data == undefined || total == undefined || times == undefined) return;
-    data.push(Math.trunc((total[total.length - 1].val - total[0].val) * 1000 / (times[times.length - 1].val - times[0].val)));
+    data.push(Math.max(0, Math.trunc(
+        (total[total.length - 1].val - total[0].val) * 1000 / (times[times.length - 1].val - times[0].val))));
     total.length = 0;
     times.length = 0;
 }
@@ -211,6 +213,13 @@ async function init() {
             el.dispatchEvent(new Event('click'));
         });
     }
+    if (!!params.get("debug") && params.get("debug") == "1") {
+        AgoraRTC.setParameter("SHOW_P2P_LOG",true);
+    }
+    if (!!params.get("int") && parseInt(params.get("int")) != NaN) {
+        drawInterval = Math.max(1, Math.min(60, parseInt(params.get("int"))));
+    }
+    console.log("draw interval=" + drawInterval);
     if (!!params.get("call")) {
         console.log("call " + params.get("call"));
         document.getElementById("room").value = params.get("call");
