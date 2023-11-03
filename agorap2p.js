@@ -203,11 +203,13 @@ async function init() {
             Array.from(document.getElementsByTagName("canvas")).forEach((el) => {
                 el.style.display = "none";
             });
-            Array.from(document.getElementsByClassName("vc-switch")).forEach((el) => {
-                el.dispatchEvent(new Event('click'));
-            });
             botmode = true;
         }
+    }
+    if (!!params.get("console") && params.get("console") == "1") {
+        Array.from(document.getElementsByClassName("vc-switch")).forEach((el) => {
+            el.dispatchEvent(new Event('click'));
+        });
     }
     if (!!params.get("call")) {
         console.log("call " + params.get("call"));
