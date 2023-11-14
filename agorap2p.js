@@ -97,8 +97,8 @@ function addJB(data, delay, count) {
 
 function addBitrate(data, samples) {
     if (data == undefined || samples == undefined) return;
-    data.push(Math.trunc(
-        (samples[samples.length - 1].val - samples[0].val) * 8 / (samples[samples.length - 1].time - samples[0].time)));
+    data.push(Math.max(0, Math.trunc(
+        (samples[samples.length - 1].val - samples[0].val) * 8 / (samples[samples.length - 1].time - samples[0].time))));
     samples.length = 0;
 }
 
