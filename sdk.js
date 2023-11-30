@@ -78,6 +78,10 @@ async function onload() {
                clientP2P.stats["in"]["roundTripTimeMeasurements"]);
         rttChart.update();
 
+        addBwe(dataset.data.rtn["chart_out_bwe"], clientRTN.stats["out"]["availableOutgoingBitrate"]);
+        addBwe(dataset.data.p2p["chart_out_bwe"], clientP2P.stats["out"]["availableOutgoingBitrate"]);
+        outbweChart.update();
+
     }, drawInterval * 1000);
 }
 
@@ -117,6 +121,12 @@ function addFps(data, samples) {
 function addResolution(data, samples) {
     if (data == undefined || samples == undefined) return;
     data.push(samples[samples.length - 1].val);
+    samples.length = 0;
+}
+
+function addBwe(data, samples) {
+    if (data == undefined || samples == undefined) return;
+    data.push(Math.trunc(samples.reduce((a, b) => a + b.val / 1024, 0) / samples.length));
     samples.length = 0;
 }
 
@@ -181,6 +191,7 @@ function initCharts() {
     outfpsChart = create("chart_out_fps", "outbound fps", dataset.time, dataset.data.rtn, dataset.data.p2p);
     outnackChart = create("chart_out_nack", "nack received", dataset.time, dataset.data.rtn, dataset.data.p2p);
     outkbpsChart = create("chart_out_kbps", "outbound bitrate(kbps)", dataset.time, dataset.data.rtn, dataset.data.p2p);
+    outbweChart  = create("chart_out_bwe", "outbound bwe(kbps)", dataset.time, dataset.data.rtn, dataset.data.p2p);
 }
 
 async function createTracks() {
@@ -375,6 +386,18 @@ async function subscribe(user, mediaType, renderID, client) {
                         })
                         output += "<br>" + outbound;
 
+                        let cp = "-------------------<br>";
+                        [...values[1].entries()].forEach((e) => {
+                            if (e.length > 1 && e[1].type == "candidate-pair") {
+                                for (const [key, value] of Object.entries(e[1])) {
+                                    cp += `${key}: ${value} <br>`;
+                                    if (key == "availableOutgoingBitrate")
+                                    report(client, "out", key, value, e[1].timestamp);
+                                }
+                            }
+                        })
+                        output += "<br>" + cp;
+
                         document.getElementById(renderID + "Stats").innerHTML = output;
                     });
             },
@@ -469,7 +492,8 @@ async function report(client, direction, key, val, ts) {
         key == "frameHeight" || key == "frameWidth" ||
         key == "framesSent" ||
         key == "bytesSent" ||
-        key == "totalRoundTripTime" || key == "roundTripTimeMeasurements"
+        key == "totalRoundTripTime" || key == "roundTripTimeMeasurements" ||
+        key == "availableOutgoingBitrate"
        ) {
         if (client.stats[direction][key] == undefined)
             client.stats[direction][key] = [];
