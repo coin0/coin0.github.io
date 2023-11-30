@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="WebRTC code samples">
+    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1">
+    <meta itemprop="description" content="Client-side WebRTC code samples">
+    <meta itemprop="image" content="../../../images/webrtc-icon-192x192.png">
+    <meta itemprop="name" content="WebRTC code samples">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta id="theme-color" name="theme-color" content="#ffffff">
+    <base target="_blank">
+    <title>Peer connection between two tabs</title>
+    <style>
+      .hidden {
+          display: none;
+      }
+
+      .highlight {
+          background-color: #eee;
+          font-size: 1.2em;
+          margin: 0 0 30px 0;
+          padding: 0.2em 1.5em;
+      }
+
+      .warning {
+          color: red;
+          font-weight: 400;
+      }
+
+      @media screen and (min-width: 1000px) {
+          /* hack! to detect non-touch devices */
+          div#links a {
+              line-height: 0.8em;
+          }
+      }
+
+      audio {
+          max-width: 100%;
+      }
+
+      body {
+          font-family: 'Roboto', sans-serif;
+          font-weight: 300;
+          margin: 0;
+          padding: 1em;
+          word-break: break-word;
+      }
+
+      button {
+          background-color: #d84a38;
+          border: none;
+          border-radius: 2px;
+          color: white;
+          font-family: 'Roboto', sans-serif;
+          font-size: 0.8em;
+          margin: 0 0 1em 0;
+          padding: 0.5em 0.7em 0.6em 0.7em;
+      }
+
+      button:active {
+          background-color: #cf402f;
+      }
+
+      button:hover {
+          background-color: #cf402f;
+      }
+
+      button[disabled] {
+          color: #ccc;
+      }
+
+      button[disabled]:hover {
+          background-color: #d84a38;
+      }
+
+      canvas {
+          background-color: #ccc;
+          max-width: 100%;
+          width: 100%;
+      }
+
+      code {
+          font-family: 'Roboto', sans-serif;
+          font-weight: 400;
+      }
+
+      div#container {
+          margin: 0 auto 0 auto;
+          max-width: 60em;
+          padding: 1em 1.5em 1.3em 1.5em;
+      }
+
+      div#links {
+          padding: 0.5em 0 0 0;
+      }
+
+      h1 {
+          border-bottom: 1px solid #ccc;
+          font-family: 'Roboto', sans-serif;
+          font-weight: 500;
+          margin: 0 0 0.8em 0;
+          padding: 0 0 0.2em 0;
+      }
+
+      h2 {
+          color: #444;
+          font-weight: 500;
+      }
+
+      h3 {
+          border-top: 1px solid #eee;
+          color: #666;
+          font-weight: 500;
+          margin: 10px 0 10px 0;
+          white-space: nowrap;
+      }
+
+      li {
+          margin: 0 0 0.4em 0;
+      }
+
+      html {
+          /* avoid annoying page width change
+  when moving from the home page */
+          overflow-y: scroll;
+      }
+
+      img {
+          border: none;
+          max-width: 100%;
+      }
+
+      input[type=radio] {
+          position: relative;
+          top: -1px;
+      }
+
+      p {
+          color: #444;
+          font-weight: 300;
+      }
+
+      p#data {
+          border-top: 1px dotted #666;
+          font-family: Courier New, monospace;
+          line-height: 1.3em;
+          max-height: 1000px;
+          overflow-y: auto;
+          padding: 1em 0 0 0;
+      }
+
+      p.borderBelow {
+          border-bottom: 1px solid #aaa;
+          padding: 0 0 20px 0;
+      }
+
+      section p:last-of-type {
+          margin: 0;
+      }
+
+      section {
+          border-bottom: 1px solid #eee;
+          margin: 0 0 30px 0;
+          padding: 0 0 20px 0;
+      }
+
+      section:last-of-type {
+          border-bottom: none;
+          padding: 0 0 1em 0;
+      }
+
+      select {
+          margin: 0 1em 1em 0;
+          position: relative;
+          top: -1px;
+      }
+
+      h1 span {
+          white-space: nowrap;
+      }
+
+      a {
+          color: #1D6EEE;
+          font-weight: 300;
+          text-decoration: none;
+      }
+
+      h1 a {
+          font-weight: 300;
+          margin: 0 10px 0 0;
+          white-space: nowrap;
+      }
+
+      a:hover {
+          color: #3d85c6;
+          text-decoration: underline;
+      }
+
+      a#viewSource {
+          display: block;
+          margin: 1.3em 0 0 0;
+          border-top: 1px solid #999;
+          padding: 1em 0 0 0;
+      }
+
+      div#errorMsg p {
+          color: #F00;
+      }
+
+      div#links a {
+          display: block;
+          line-height: 1.3em;
+          margin: 0 0 1.5em 0;
+      }
+
+      div.outputSelector {
+          margin: -1.3em 0 2em 0;
+      }
+
+      p.description {
+          margin: 0 0 0.5em 0;
+      }
+
+      strong {
+          font-weight: 500;
+      }
+
+      textarea {
+          resize: none;
+          font-family: 'Roboto', sans-serif;
+      }
+
+      video {
+          background: #222;
+          margin: 0 0 20px 0;
+          --width: 100%;
+          width: var(--width);
+          height: calc(var(--width) * 0.75);
+      }
+
+      ul {
+          margin: 0 0 0.5em 0;
+      }
+
+      @media screen and (max-width: 650px) {
+          .highlight {
+              font-size: 1em;
+              margin: 0 0 20px 0;
+              padding: 0.2em 1em;
+          }
+
+          h1 {
+              font-size: 24px;
+          }
+      }
+
+      @media screen and (max-width: 550px) {
+          button:active {
+              background-color: darkRed;
+          }
+
+          h1 {
+              font-size: 22px;
+          }
+      }
+
+      @media screen and (max-width: 450px) {
+          h1 {
+              font-size: 20px;
+          }
+      }
+
+      button {
+          margin: 0 20px 0 0;
+          width: 83px;
+      }
+
+      button#hangupButton {
+          margin: 0;
+      }
+
+      video {
+          --width: 45%;
+          width: var(--width);
+          height: calc(var(--width) * 0.75);
+          margin: 0 0 20px 0;
+          vertical-align: top;
+      }
+
+      video#localVideo {
+          margin: 0 20px 20px 0;
+      }
+
+      div.box {
+          margin: 1em;
+      }
+
+      @media screen and (max-width: 400px) {
+          button {
+              width: 83px;
+              margin: 0 11px 10px 0;
+          }
+
+          video {
+              height: 90px;
+              margin: 0 0 10px 0;
+              width: calc(50% - 7px);
+          }
+          video#localVideo {
+              margin: 0 10px 20px 0;
+          }
+      }
+
+      canvas {
+          max-width:30%;
+          max-height:200px;
+          background-color:#ffffff;
+          float:left;
+          margin-right: 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="container">
+      <h1><a href="//webrtc.github.io/samples/" title="WebRTC samples homepage">WebRTC samples</a>
+        <span>Agora SD-RTN vs Public Internet</span></h1>
+
+      <p class="video-box">This sample shows how to setup a connection between two peers using
+        <a href="https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection">RTCPeerConnection</a>.
+      </p>
+
+      <table border="0" style="margin:auto" class="video-box">
+        <tr><td><b>local video</b></td></tr>
+        <tr>
+          <td style="text-align:center;">
+            <video id="localVideo" playsinline autoplay muted></video>
+          </td>
+        </tr>
+      </table>
+
+      <p class="video-box"><b>remote video</b></p>
+      <table border="0" style="width:100%">
+        <tr class="video-box">
+          <td style="text-align:left;width:50%;">
+            P2P over internet <br>
+          </td>
+          <td style="text-align:left;width:50%;">
+            SD-RTN <br>
+          </td>
+        </tr>
+        <tr class="video-box">
+          <td>
+            <video id="remoteVideo" style="width:90%" playsinline autoplay></video>
+          </td>
+          <td>
+            <video id="remoteVideo2" style="width:90%" playsinline autoplay></video>
+          </td>
+        </tr>
+        <tr class="video-box">
+          <td>
+            <div id="remoteVideoStats" style="font-size:12px;"></div>
+          </td>
+          <td>
+            <div id="remoteVideo2Stats" style="font-size:12px;"></div>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2">
+            <canvas id="chart_in_jitter"></canvas>
+            <canvas id="chart_in_jb"></canvas>
+            <canvas id="chart_in_kbps"></canvas>
+            <canvas id="chart_in_nack"></canvas>
+            <canvas id="chart_in_loss"></canvas>
+            <canvas id="chart_in_fps"></canvas>
+            <canvas id="chart_in_rtt"></canvas>
+            <canvas id="chart_out_width"></canvas>
+            <canvas id="chart_out_height"></canvas>
+            <canvas id="chart_out_fps"></canvas>
+            <canvas id="chart_out_nack"></canvas>
+            <canvas id="chart_out_kbps"></canvas>
+          </td>
+        </tr>
+      </table>
+
+      <div class="box">
+        <span id="desc">Your phone number is <b id="no"></b> or call a number &nbsp;</span>
+        <input type="text" id="room" name="room">
+        <p></p>
+        <button id="callButton">Call</button>
+        <button id="hangupButton">Hang Up</button>
+      </div>
+
+    </div>
+  </body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js" integrity="sha512-6HrPqAvK+lZElIZ4mZ64fyxIBTsaX5zAFZg2V/2WT+iKPrFzTzvx6QAsLW2OaLwobhMYBog/+bvmIEEGXi0p1w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+  <script>
+    // VConsole will be exported to `window.VConsole` by default.
+    var vConsole = new window.VConsole();
+  </script>
+  <script src="AgoraRTC_N-p2p.js"></script>
+  <script src="sdk.js"></script>
+</html>
