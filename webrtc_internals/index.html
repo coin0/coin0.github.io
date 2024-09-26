@@ -1,0 +1,67 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Import webrtc-internals dumps</title>
+        <!-- highcharts is used under the terms of
+            http://shop.highsoft.com/faq/non-commercial
+        -->
+        <script src="https://code.highcharts.com/highcharts.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.js"></script>
+        <script src="https://webrtchacks.github.io/adapter/adapter-latest.js"></script>
+        <script src="import.js"></script>
+        <style>
+body, body svg text {
+    font-family: monospace;
+}
+details[open] pre {
+    padding-left: 10px;
+    padding-bottom: 10px;
+}
+table details[open] summary {
+    color: blue;
+}
+#tables {
+    display: none;
+}
+#tables>details:nth-of-type(even) {
+    background-color: #f0f0f0;
+}
+
+.graph {
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+.candidatepairtable {
+    text-align: center;
+}
+.candidatepairtable td {
+    background-color: #ddd;
+    padding: 5px;
+}
+ice.style['background-color'] = '#ddd';
+ice.style['text-align'] = 'center';
+
+button.copyBtn {
+    border: 0px;
+}
+        </style>
+    </head>
+    <body>
+        <p>This is an import tool for dumps from chrome://webrtc-internals. See <a href="http://testrtc.com/webrtc-internals-parameters/">this blog post</a> for a lengthy description of what it does and how to interpret some of the data.
+        <form>
+            <label>Select a WebRTC-internals JSON dump:</label>
+            <input type="file" onchange="doImport(event)">
+            <br>
+            <input type="checkbox" id="useReferenceTime"><label for="useReferenceTime">Use RTCPeerConnection creation time as start time for all graphs.</label>
+        </form>
+        <div id="legacy" style="display:none">
+            <b>Legacy getStats detected, these have been remove from Chrome 122 in early 2024.</b>
+            If you need to import such a dump please use an old version of the git repository prior
+            to this <a href="https://github.com/fippo/webrtc-dump-importer/commit/136f273810d90e915f05d10e0ff3fb98ee9f041b">commit</a>.
+        </div>
+        <div id="tables">
+            <b>User Agent:</b> <span id="userAgent"></span>
+        </div>
+    </body>
+</html>
