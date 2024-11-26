@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+ <head>
+   <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+   <title>Web Player</title>
+ </head>
+ <body style="height: 100%; margin:0 auto;">
+   <button onclick="javascript:play();">play</button>
+   <div id="video-box" style="width:640px;height:480px;background-color:#ccc"></div>
+ </body>
+ <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.1-300.js"></script>
+ <script>
+   AgoraRTC.setParameter("EXPERIMENTS", {"enableH264NaluFilter":true});
+   AgoraRTC.setParameter("SYNC_GROUP", false);
+
+   async function play() {
+       client = AgoraRTC.createClient({mode: "live", codec: "vp8"});
+
+       let params = (new URL(document.location)).searchParams;
+
+       if (!params.get("appid")) {
+           console.error("[webapp] appid not specified");
+           return;
+       }
+       if (!params.get("cname")) {
+           console.error("[webapp] cname not specified");
+           return;
+       }
+
+       let appid = params.get("appid");
+       let cname = params.get("cname");
+
+       client.setClientRole("audience", {level: 2});
+       client.on("user-published", handleUserPublished);
+       client.on("user-unpublished", handleUserUnpublished);
+       try {
+           ruid = await client.join(appid, cname, null, null);
+       } catch (e) {
+           console.error("[webapp] join() failed, reason: " + e);
+       }
+   }
+
+   async function handleUserPublished(user, mediaType) {
+       try {
+           await client.subscribe(user, mediaType);
+       } catch (e) {
+           console.error("[webapp] subscribe() failed, reason: " + e);
+       }
+
+       console.log("[webapp] publish event", user, mediaType);
+
+       if (mediaType === 'video') {
+           user.videoTrack.play('video-box', {fit:"contain"});
+       } else if (mediaType === 'audio') {
+           user.audioTrack.play();
+       }
+   }
+
+   function handleUserUnpublished(user, mediaType) {}
+ </script>
+</html>
