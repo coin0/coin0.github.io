@@ -12,7 +12,12 @@
  <script src="./4.23.0.js"></script>
  <script>
    // AgoraRTC.setParameter("EXPERIMENTS", {"enableH264NaluFilter":true});
+   AgoraRTC.setParameter("GATEWAY_ADDRESS", [{ip:"114.236.138.120", port:9870},]);
    AgoraRTC.setParameter("SYNC_GROUP", false);
+   AgoraRTC.setParameter("ENABLE_PRELOAD", false);
+   AgoraRTC.setParameter("AP_AREA", false);
+   AgoraRTC.setParameter("WEBCS_DOMAIN", ["http-cn.ap.staging-1-aws.myagoralab.com","http-cn.ap.staging-1-ali.myagoralab.com"]);
+   AgoraRTC.setParameter("GATEWAY_DOMAINS", ["edge.staging-1-aws.myagoralab.com"]);
 
    async function play() {
        client = AgoraRTC.createClient({mode: "live", codec: "vp8"});
