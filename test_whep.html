@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+ <head>
+   <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+   <title>Web Player</title>
+ </head>
+ <body style="height: 100%; margin:0 auto;">
+   <button onclick="javascript:play();">play</button>
+   <div id="video-box" style="width:640px;height:480px;background-color:#ccc"></div>
+   <p id="localsdp"></p>
+ </body>
+ <script>
+   let pc = new RTCPeerConnection();
+
+   function play() {
+       pc.createOffer({offerToReceiveAudio: true, offerToReceiveVideo: true })
+           .then((offer) => {
+               console.log(offer);
+               document.getElementById("localsdp").innerHTML = offer.sdp.replaceAll('\r\n', '<br>');
+               pc.setLocalDescription(offer);
+           })
+           .then(() => {
+               let req = new XMLHttpRequest();
+               req.open('POST', 'http://183.131.160.209:19306/whep', true);
+               req.setRequestHeader("Content-type","application/sdp");
+               req.send("");
+               req.onreadystatechange = function () {
+                   if (req.readyState == 4 && req.status == 200) {
+                       var json = req.responseText;
+                       console.log(json);
+                   }
+               };
+           })
+           .catch((reason) => {
+               console.error(reason);
+           });
+   }
+ </script>
+</html>
