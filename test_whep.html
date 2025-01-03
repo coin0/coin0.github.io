@@ -12,23 +12,24 @@
  </body>
  <script>
    let pc = new RTCPeerConnection();
+   const dc = pc.createDataChannel("whatever");
 
    function play() {
        pc.createOffer({offerToReceiveAudio: true, offerToReceiveVideo: true })
            .then((offer) => {
                console.log(offer);
                document.getElementById("localsdp").innerHTML = offer.sdp.replaceAll('\r\n', '<br>');
-               pc.setLocalDescription(offer);
+               return pc.setLocalDescription(offer);
            })
            .then(() => {
                let req = new XMLHttpRequest();
                req.open('POST', 'http://183.131.160.209:19306/whep', true);
                req.setRequestHeader("Content-type","application/sdp");
-               req.send("");
+               req.send(pc.localDescription.sdp);
                req.onreadystatechange = function () {
                    if (req.readyState == 4 && req.status == 200) {
-                       var json = req.responseText;
-                       console.log(json);
+                       var sdp = req.responseText;
+                       pc.setRemoteDescription({sdp:sdp, type:"answer"});
                    }
                };
            })
