@@ -359,6 +359,11 @@
           <option value="NorthAmerica">North America</option>
           <option value="EastAsia">East Asia</option>
         </select>
+        <select name="proto" id="protoSelect">
+          <option value="TLS443">TCP 443</option>
+          <option value="TCP3478">TCP 3478</option>
+          <option value="UDP3478">UDP 3478</option>
+        </select>
         <button id="startButton">Start</button>
         <button id="callButton">Call</button>
         <button id="hangupButton">Hang Up</button>
@@ -465,37 +470,41 @@
               console.log(`Using audio device: ${audioTracks[0].label}`);
           }
 
-          const turnUser = 'test0107';
-          const turnCred = 'aosdifhnwoefnwenf';
+          const turnUser = 'test';
+          const turnCred = '111111';
           let configSet = {
-              "SaudiArabia": {'iceServers': [{urls: 'turns:158-101-248-79.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turns:158-101-248-79.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:158.101.248.79:3478?transport=udp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:158.101.248.79:3478?transport=tcp', credential: turnCred, username: turnUser}],
-                              'iceTransportPolicy': 'relay'},
-              "India":       {'iceServers': [{urls: 'turns:128-1-105-152.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turns:128-1-105-152.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:128.1.105.152:3478?transport=udp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:128.1.105.152:3478?transport=tcp', credential: turnCred, username: turnUser}],
-                              'iceTransportPolicy': 'relay'},
-              "Europe":      {'iceServers': [{urls: 'turns:23-236-110-36.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turns:23-236-110-36.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:23.236.110.36:3478?transport=udp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:23.236.110.36:3478?transport=tcp', credential: turnCred, username: turnUser}],
-                              'iceTransportPolicy': 'relay'},
-              "NorthAmerica":{'iceServers': [{urls: 'turns:128-14-247-139.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turns:128-14-247-139.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:128.14.247.139:3478?transport=udp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:128.14.247.139:3478?transport=tcp', credential: turnCred, username: turnUser}],
-                              'iceTransportPolicy': 'relay'},
-              "EastAsia":    {'iceServers': [{urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:183.131.160.209:3478?transport=udp', credential: turnCred, username: turnUser},
-                                             {urls: 'turn:183.131.160.209:3478?transport=tcp', credential: turnCred, username: turnUser}],
-                              'iceTransportPolicy': 'relay'},
+              "SaudiArabia": {
+                  "TLS443":  [{urls: 'turns:158-101-248-79.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
+                              {urls: 'turns:158-101-248-79.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
+                  "UDP3478": [{urls: 'turn:158.101.248.79:3478?transport=udp', credential: turnCred, username: turnUser}],
+                  "TCP3478": [{urls: 'turn:158.101.248.79:3478?transport=tcp', credential: turnCred, username: turnUser}]},
+              "India":       {
+                  "TLS443":  [{urls: 'turns:128-1-105-152.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
+                              {urls: 'turns:128-1-105-152.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
+                  "UDP3478": [{urls: 'turn:128.1.105.152:3478?transport=udp', credential: turnCred, username: turnUser}],
+                  "TCP3478": [{urls: 'turn:128.1.105.152:3478?transport=tcp', credential: turnCred, username: turnUser}]},
+              "Europe":      {
+                  "TLS443":  [{urls: 'turns:23-236-110-36.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
+                              {urls: 'turns:23-236-110-36.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
+                  "UDP3478": [{urls: 'turn:23.236.110.36:3478?transport=udp', credential: turnCred, username: turnUser}],
+                  "TCP3478": [{urls: 'turn:23.236.110.36:3478?transport=tcp', credential: turnCred, username: turnUser}]},
+              "NorthAmerica":{
+                  "TLS443":  [{urls: 'turns:128-14-247-139.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
+                              {urls: 'turns:128-14-247-139.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
+                  "UDP3478": [{urls: 'turn:128.14.247.139:3478?transport=udp', credential: turnCred, username: turnUser}],
+                  "TCP3478": [{urls: 'turn:128.14.247.139:3478?transport=tcp', credential: turnCred, username: turnUser}]},
+              "EastAsia":    {
+                  'TLS443':  [{urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser},
+                              {urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser}],
+                  "UDP3478": [{urls: 'turn:183.131.160.209:3478?transport=udp', credential: turnCred, username: turnUser}],
+                  "TCP3478": [{urls: 'turn:183.131.160.209:3478?transport=tcp', credential: turnCred, username: turnUser}]}
           };
 
-          const configuration = configSet[document.getElementById('regionSelect').value];
+          let configuration = {
+              "iceServers": configSet[document.getElementById('regionSelect').value][document.getElementById('protoSelect').value],
+              "iceTransportPolicy": 'relay'
+          };
+
           console.log('RTCPeerConnection configuration:', configuration);
           pc1 = new RTCPeerConnection(configuration);
           Info('Created local peer connection object pc1');
