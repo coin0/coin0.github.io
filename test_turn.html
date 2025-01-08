@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
-  <head>
+
+<head>
 
     <meta charset="utf-8">
     <meta name="description" content="WebRTC code samples">
@@ -14,652 +15,661 @@
 
     <title>Peer connection</title>
     <style>
-      .hidden {
-          display: none;
-      }
+        .hidden {
+            display: none;
+        }
 
-      .highlight {
-          background-color: #eee;
-          font-size: 1.2em;
-          margin: 0 0 30px 0;
-          padding: 0.2em 1.5em;
-      }
+        .highlight {
+            background-color: #eee;
+            font-size: 1.2em;
+            margin: 0 0 30px 0;
+            padding: 0.2em 1.5em;
+        }
 
-      .warning {
-          color: red;
-          font-weight: 400;
-      }
+        .warning {
+            color: red;
+            font-weight: 400;
+        }
 
-      @media screen and (min-width: 1000px) {
-          /* hack! to detect non-touch devices */
-          div#links a {
-              line-height: 0.8em;
-          }
-      }
+        @media screen and (min-width: 1000px) {
 
-      audio {
-          max-width: 100%;
-      }
+            /* hack! to detect non-touch devices */
+            div#links a {
+                line-height: 0.8em;
+            }
+        }
 
-      body {
-          font-family: 'Roboto', sans-serif;
-          font-weight: 300;
-          margin: 0;
-          padding: 1em;
-          word-break: break-word;
-      }
+        audio {
+            max-width: 100%;
+        }
 
-      button {
-          background-color: #d84a38;
-          border: none;
-          border-radius: 2px;
-          color: white;
-          font-family: 'Roboto', sans-serif;
-          font-size: 0.8em;
-          margin: 0 0 1em 0;
-          padding: 0.5em 0.7em 0.6em 0.7em;
-      }
+        body {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 300;
+            margin: 0;
+            padding: 1em;
+            word-break: break-word;
+        }
 
-      button:active {
-          background-color: #cf402f;
-      }
+        button {
+            background-color: #d84a38;
+            border: none;
+            border-radius: 2px;
+            color: white;
+            font-family: 'Roboto', sans-serif;
+            font-size: 0.8em;
+            margin: 0 0 1em 0;
+            padding: 0.5em 0.7em 0.6em 0.7em;
+        }
 
-      button:hover {
-          background-color: #cf402f;
-      }
+        button:active {
+            background-color: #cf402f;
+        }
 
-      button[disabled] {
-          color: #ccc;
-      }
+        button:hover {
+            background-color: #cf402f;
+        }
 
-      button[disabled]:hover {
-          background-color: #d84a38;
-      }
+        button[disabled] {
+            color: #ccc;
+        }
 
-      select {
-          height: 35px;
-          line-height:35px;
-      }
+        button[disabled]:hover {
+            background-color: #d84a38;
+        }
 
-      canvas {
-          background-color: #ccc;
-          max-width: 100%;
-          width: 100%;
-      }
+        select {
+            height: 35px;
+            line-height: 35px;
+        }
 
-      code {
-          font-family: 'Roboto', sans-serif;
-          font-weight: 400;
-      }
+        canvas {
+            background-color: #ccc;
+            max-width: 100%;
+            width: 100%;
+        }
 
-      div#container {
-          margin: 0 auto 0 auto;
-          max-width: 60em;
-          padding: 1em 1.5em 1.3em 1.5em;
-      }
+        code {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 400;
+        }
 
-      div#links {
-          padding: 0.5em 0 0 0;
-      }
+        div#container {
+            margin: 0 auto 0 auto;
+            max-width: 60em;
+            padding: 1em 1.5em 1.3em 1.5em;
+        }
 
-      h1 {
-          border-bottom: 1px solid #ccc;
-          font-family: 'Roboto', sans-serif;
-          font-weight: 500;
-          margin: 0 0 0.8em 0;
-          padding: 0 0 0.2em 0;
-      }
+        div#links {
+            padding: 0.5em 0 0 0;
+        }
 
-      h2 {
-          color: #444;
-          font-weight: 500;
-      }
+        h1 {
+            border-bottom: 1px solid #ccc;
+            font-family: 'Roboto', sans-serif;
+            font-weight: 500;
+            margin: 0 0 0.8em 0;
+            padding: 0 0 0.2em 0;
+        }
 
-      h3 {
-          border-top: 1px solid #eee;
-          color: #666;
-          font-weight: 500;
-          margin: 10px 0 10px 0;
-          white-space: nowrap;
-      }
+        h2 {
+            color: #444;
+            font-weight: 500;
+        }
 
-      li {
-          margin: 0 0 0.4em 0;
-      }
+        h3 {
+            border-top: 1px solid #eee;
+            color: #666;
+            font-weight: 500;
+            margin: 10px 0 10px 0;
+            white-space: nowrap;
+        }
 
-      html {
-          /* avoid annoying page width change
+        li {
+            margin: 0 0 0.4em 0;
+        }
+
+        html {
+            /* avoid annoying page width change
   when moving from the home page */
-          overflow-y: scroll;
-      }
+            overflow-y: scroll;
+        }
 
-      img {
-          border: none;
-          max-width: 100%;
-      }
+        img {
+            border: none;
+            max-width: 100%;
+        }
 
-      input[type=radio] {
-          position: relative;
-          top: -1px;
-      }
+        input[type=radio] {
+            position: relative;
+            top: -1px;
+        }
 
-      p {
-          color: #444;
-          font-weight: 300;
-      }
+        p {
+            color: #444;
+            font-weight: 300;
+        }
 
-      p#data {
-          border-top: 1px dotted #666;
-          font-family: Courier New, monospace;
-          line-height: 1.3em;
-          max-height: 1000px;
-          overflow-y: auto;
-          padding: 1em 0 0 0;
-      }
+        p#data {
+            border-top: 1px dotted #666;
+            font-family: Courier New, monospace;
+            line-height: 1.3em;
+            max-height: 1000px;
+            overflow-y: auto;
+            padding: 1em 0 0 0;
+        }
 
-      p.borderBelow {
-          border-bottom: 1px solid #aaa;
-          padding: 0 0 20px 0;
-      }
+        p.borderBelow {
+            border-bottom: 1px solid #aaa;
+            padding: 0 0 20px 0;
+        }
 
-      section p:last-of-type {
-          margin: 0;
-      }
+        section p:last-of-type {
+            margin: 0;
+        }
 
-      section {
-          border-bottom: 1px solid #eee;
-          margin: 0 0 30px 0;
-          padding: 0 0 20px 0;
-      }
+        section {
+            border-bottom: 1px solid #eee;
+            margin: 0 0 30px 0;
+            padding: 0 0 20px 0;
+        }
 
-      section:last-of-type {
-          border-bottom: none;
-          padding: 0 0 1em 0;
-      }
+        section:last-of-type {
+            border-bottom: none;
+            padding: 0 0 1em 0;
+        }
 
-      select {
-          margin: 0 1em 1em 0;
-          position: relative;
-          top: -1px;
-      }
+        select {
+            margin: 0 1em 1em 0;
+            position: relative;
+            top: -1px;
+        }
 
-      h1 span {
-          white-space: nowrap;
-      }
+        h1 span {
+            white-space: nowrap;
+        }
 
-      a {
-          color: #1D6EEE;
-          font-weight: 300;
-          text-decoration: none;
-      }
+        a {
+            color: #1D6EEE;
+            font-weight: 300;
+            text-decoration: none;
+        }
 
-      h1 a {
-          font-weight: 300;
-          margin: 0 10px 0 0;
-          white-space: nowrap;
-      }
+        h1 a {
+            font-weight: 300;
+            margin: 0 10px 0 0;
+            white-space: nowrap;
+        }
 
-      a:hover {
-          color: #3d85c6;
-          text-decoration: underline;
-      }
+        a:hover {
+            color: #3d85c6;
+            text-decoration: underline;
+        }
 
-      a#viewSource {
-          display: block;
-          margin: 1.3em 0 0 0;
-          border-top: 1px solid #999;
-          padding: 1em 0 0 0;
-      }
+        a#viewSource {
+            display: block;
+            margin: 1.3em 0 0 0;
+            border-top: 1px solid #999;
+            padding: 1em 0 0 0;
+        }
 
-      div#errorMsg p {
-          color: #F00;
-      }
+        div#errorMsg p {
+            color: #F00;
+        }
 
-      p.errorLog {
-          color: #F00;
-      }
+        p.errorLog {
+            color: #F00;
+        }
 
-      div#links a {
-          display: block;
-          line-height: 1.3em;
-          margin: 0 0 1.5em 0;
-      }
+        div#links a {
+            display: block;
+            line-height: 1.3em;
+            margin: 0 0 1.5em 0;
+        }
 
-      div.outputSelector {
-          margin: -1.3em 0 2em 0;
-      }
+        div.outputSelector {
+            margin: -1.3em 0 2em 0;
+        }
 
-      p.description {
-          margin: 0 0 0.5em 0;
-      }
+        p.description {
+            margin: 0 0 0.5em 0;
+        }
 
-      strong {
-          font-weight: 500;
-      }
+        strong {
+            font-weight: 500;
+        }
 
-      textarea {
-          resize: none;
-          font-family: 'Roboto', sans-serif;
-      }
+        textarea {
+            resize: none;
+            font-family: 'Roboto', sans-serif;
+        }
 
-      video {
-          background: #222;
-          margin: 0 0 20px 0;
-          --width: 100%;
-          width: var(--width);
-          height: calc(var(--width) * 0.75);
-      }
+        video {
+            background: #222;
+            margin: 0 0 20px 0;
+            --width: 100%;
+            width: var(--width);
+            height: calc(var(--width) * 0.75);
+        }
 
-      ul {
-          margin: 0 0 0.5em 0;
-      }
+        ul {
+            margin: 0 0 0.5em 0;
+        }
 
-      fieldset {
-          margin: 0 0 1em 0;
-      }
+        fieldset {
+            margin: 0 0 1em 0;
+        }
 
-      fieldset > select {
-          margin-top: 1em;
-      }
+        fieldset>select {
+            margin-top: 1em;
+        }
 
-      @media screen and (max-width: 650px) {
-          .highlight {
-              font-size: 1em;
-              margin: 0 0 20px 0;
-              padding: 0.2em 1em;
-          }
+        @media screen and (max-width: 650px) {
+            .highlight {
+                font-size: 1em;
+                margin: 0 0 20px 0;
+                padding: 0.2em 1em;
+            }
 
-          h1 {
-              font-size: 24px;
-          }
-      }
+            h1 {
+                font-size: 24px;
+            }
+        }
 
-      @media screen and (max-width: 550px) {
-          button:active {
-              background-color: darkRed;
-          }
+        @media screen and (max-width: 550px) {
+            button:active {
+                background-color: darkRed;
+            }
 
-          h1 {
-              font-size: 22px;
-          }
-      }
+            h1 {
+                font-size: 22px;
+            }
+        }
 
-      @media screen and (max-width: 450px) {
-          h1 {
-              font-size: 20px;
-          }
-      }
+        @media screen and (max-width: 450px) {
+            h1 {
+                font-size: 20px;
+            }
+        }
 
-      button {
-          margin: 0 20px 0 0;
-          width: 83px;
-      }
+        button {
+            margin: 0 20px 0 0;
+            width: 83px;
+        }
 
-      button#hangupButton {
-          margin: 0;
-      }
+        button#hangupButton {
+            margin: 0;
+        }
 
-      video {
-          --width: 45%;
-          width: var(--width);
-          height: calc(var(--width) * 0.75);
-          margin: 0 0 20px 0;
-          vertical-align: top;
-      }
+        video {
+            --width: 45%;
+            width: var(--width);
+            height: calc(var(--width) * 0.75);
+            margin: 0 0 20px 0;
+            vertical-align: top;
+        }
 
-      video#localVideo {
-          margin: 0 20px 20px 0;
-      }
+        video#localVideo {
+            margin: 0 20px 20px 0;
+        }
 
-      div.box {
-          margin: 1em;
-      }
+        div.box {
+            margin: 1em;
+        }
 
-      @media screen and (max-width: 400px) {
-          button {
-              width: 83px;
-              margin: 0 11px 10px 0;
-          }
+        @media screen and (max-width: 400px) {
+            button {
+                width: 83px;
+                margin: 0 11px 10px 0;
+            }
 
-          video {
-              height: 90px;
-              margin: 0 0 10px 0;
-              width: calc(50% - 7px);
-          }
-          video#localVideo {
-              margin: 0 10px 20px 0;
-          }
+            video {
+                height: 90px;
+                margin: 0 0 10px 0;
+                width: calc(50% - 7px);
+            }
 
-      }
+            video#localVideo {
+                margin: 0 10px 20px 0;
+            }
+
+        }
     </style>
 
-    <link rel="stylesheet" href="../../../css/main.css"/>
-    <link rel="stylesheet" href="css/main.css"/>
+    <link rel="stylesheet" href="../../../css/main.css" />
+    <link rel="stylesheet" href="css/main.css" />
 
-  </head>
+</head>
 
-  <body>
+<body>
 
     <div id="container">
-      <h1><a href="//webrtc.github.io/samples/" title="WebRTC samples homepage">WebRTC samples</a>
-        <span>Peer connection</span></h1>
+        <h1><a href="//webrtc.github.io/samples/" title="WebRTC samples homepage">WebRTC samples</a>
+            <span>Peer connection</span>
+        </h1>
 
-      <p>This sample shows how to setup a connection between two peers using
-        <a href="https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection">RTCPeerConnection</a>.
-      </p>
+        <p>This sample shows how to setup a connection between two peers using
+            <a href="https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection">RTCPeerConnection</a>.
+        </p>
 
-      <video id="localVideo" playsinline autoplay muted></video>
-      <video id="remoteVideo" playsinline autoplay></video>
+        <video id="localVideo" playsinline autoplay muted></video>
+        <video id="remoteVideo" playsinline autoplay></video>
 
-      <table>
-        <tr>
-            <td><div id="pc1Stat" style="width:10px;height:10px;background-color:gray;"></div></td>
-            <td><div id="pc2Stat" style="width:10px;height:10px;background-color:gray"></div></td>
-        </tr>
-      </table>
+        <table>
+            <tr>
+                <td>
+                    <div id="pc1Stat" style="width:10px;height:10px;background-color:gray;"></div>
+                </td>
+                <td>
+                    <div id="pc2Stat" style="width:10px;height:10px;background-color:gray"></div>
+                </td>
+            </tr>
+        </table>
 
-      <div class="box">
-        <select name="region" id="regionSelect">
-          <option value="SaudiArabia">Saudi Arabia</option>
-          <option value="India">India</option>
-          <option value="Europe">Europe</option>
-          <option value="NorthAmerica">North America</option>
-          <option value="EastAsia">East Asia</option>
-        </select>
-        <select name="proto" id="protoSelect">
-          <option value="TLS443IO">TCP 443 .io</option>
-          <option value="TLS443COM">TCP 443 .com</option>
-          <option value="UDP443">UDP 443</option>
-          <option value="TCP3478">TCP 3478</option>
-          <option value="UDP3478">UDP 3478</option>
-        </select>
-        <button id="startButton">Start</button>
-        <button id="callButton">Call</button>
-        <button id="hangupButton">Hang Up</button>
-      </div>
+        <div class="box">
+            <select name="region" id="regionSelect">
+                <option value="SaudiArabia">Saudi Arabia</option>
+                <option value="India">India</option>
+                <option value="Europe">Europe</option>
+                <option value="NorthAmerica">North America</option>
+                <option value="EastAsia">East Asia</option>
+            </select>
+            <select name="proto" id="protoSelect">
+                <option value="TLS443IO">TCP 443 .io</option>
+                <option value="TLS443COM">TCP 443 .com</option>
+                <option value="UDP443">UDP 443</option>
+                <option value="TCP3478">TCP 3478</option>
+                <option value="UDP3478">UDP 3478</option>
+            </select>
+            <button id="startButton">Start</button>
+            <button id="callButton">Call</button>
+            <button id="hangupButton">Hang Up</button>
+        </div>
 
-      <p>View the console to see logging. The <code>MediaStream</code> object <code>localStream</code>, and the <code>RTCPeerConnection</code>
-        objects <code>pc1</code> and <code>pc2</code> are in global scope, so you can inspect them in the console as
-        well.</p>
+        <p>View the console to see logging. The <code>MediaStream</code> object <code>localStream</code>, and the
+            <code>RTCPeerConnection</code>
+            objects <code>pc1</code> and <code>pc2</code> are in global scope, so you can inspect them in the console as
+            well.</p>
 
-      <p>For more information about RTCPeerConnection, see <a href="http://www.html5rocks.com/en/tutorials/webrtc/basics/"
-                                                              title="HTML5 Rocks article about WebRTC by Sam Dutton">Getting
-          Started With WebRTC</a>.</p>
+        <p>For more information about RTCPeerConnection, see <a
+                href="http://www.html5rocks.com/en/tutorials/webrtc/basics/"
+                title="HTML5 Rocks article about WebRTC by Sam Dutton">Getting
+                Started With WebRTC</a>.</p>
 
 
-      <a href="https://github.com/webrtc/samples/tree/gh-pages/src/content/peerconnection/pc1"
-         title="View source for this page on GitHub" id="viewSource">View source on GitHub</a>
+        <a href="https://github.com/webrtc/samples/tree/gh-pages/src/content/peerconnection/pc1"
+            title="View source for this page on GitHub" id="viewSource">View source on GitHub</a>
 
-      <h3>&nbsp</h3>
-      <div id="logOutput">
-      </div>
+        <h3>&nbsp</h3>
+        <div id="logOutput">
+        </div>
 
     </div>
 
     <script>
-      'use strict';
+        'use strict';
 
-      const startButton = document.getElementById('startButton');
-      const callButton = document.getElementById('callButton');
-      const hangupButton = document.getElementById('hangupButton');
-      callButton.disabled = true;
-      hangupButton.disabled = true;
-      startButton.addEventListener('click', start);
-      callButton.addEventListener('click', call);
-      hangupButton.addEventListener('click', hangup);
+        const startButton = document.getElementById('startButton');
+        const callButton = document.getElementById('callButton');
+        const hangupButton = document.getElementById('hangupButton');
+        callButton.disabled = true;
+        hangupButton.disabled = true;
+        startButton.addEventListener('click', start);
+        callButton.addEventListener('click', call);
+        hangupButton.addEventListener('click', hangup);
 
-      let startTime;
-      const localVideo = document.getElementById('localVideo');
-      const remoteVideo = document.getElementById('remoteVideo');
+        let startTime;
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
 
-      localVideo.addEventListener('loadedmetadata', function() {
-          console.log(`Local video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
-      });
+        localVideo.addEventListener('loadedmetadata', function () {
+            console.log(`Local video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
+        });
 
-      remoteVideo.addEventListener('loadedmetadata', function() {
-          console.log(`Remote video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
-      });
+        remoteVideo.addEventListener('loadedmetadata', function () {
+            console.log(`Remote video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
+        });
 
-      remoteVideo.addEventListener('resize', () => {
-          console.log(`Remote video size changed to ${remoteVideo.videoWidth}x${remoteVideo.videoHeight} - Time since pageload ${performance.now().toFixed(0)}ms`);
-          // We'll use the first onsize callback as an indication that video has started
-          // playing out.
-          if (startTime) {
-              const elapsedTime = window.performance.now() - startTime;
-              console.log('Setup time: ' + elapsedTime.toFixed(3) + 'ms');
-              startTime = null;
-          }
-      });
+        remoteVideo.addEventListener('resize', () => {
+            console.log(`Remote video size changed to ${remoteVideo.videoWidth}x${remoteVideo.videoHeight} - Time since pageload ${performance.now().toFixed(0)}ms`);
+            // We'll use the first onsize callback as an indication that video has started
+            // playing out.
+            if (startTime) {
+                const elapsedTime = window.performance.now() - startTime;
+                console.log('Setup time: ' + elapsedTime.toFixed(3) + 'ms');
+                startTime = null;
+            }
+        });
 
-      let localStream;
-      let pc1;
-      let pc2;
-      const offerOptions = {
-          offerToReceiveAudio: 1,
-          offerToReceiveVideo: 1
-      };
+        let localStream;
+        let pc1;
+        let pc2;
+        const offerOptions = {
+            offerToReceiveAudio: 1,
+            offerToReceiveVideo: 1
+        };
 
-      function getName(pc) {
-          return (pc === pc1) ? 'pc1' : 'pc2';
-      }
+        function getName(pc) {
+            return (pc === pc1) ? 'pc1' : 'pc2';
+        }
 
-      function getOtherPc(pc) {
-          return (pc === pc1) ? pc2 : pc1;
-      }
+        function getOtherPc(pc) {
+            return (pc === pc1) ? pc2 : pc1;
+        }
 
-      async function start() {
-          console.log('Requesting local stream');
-          startButton.disabled = true;
-          try {
-              const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
-              console.log('Received local stream');
-              localVideo.srcObject = stream;
-              localStream = stream;
-              callButton.disabled = false;
-          } catch (e) {
-              alert(`getUserMedia() error: ${e.name}`);
-          }
-      }
+        async function start() {
+            console.log('Requesting local stream');
+            startButton.disabled = true;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                console.log('Received local stream');
+                localVideo.srcObject = stream;
+                localStream = stream;
+                callButton.disabled = false;
+            } catch (e) {
+                alert(`getUserMedia() error: ${e.name}`);
+            }
+        }
 
-      let timebase = 0;
-      async function call() {
-          timebase = Date.now();
-          logOutput.innerHTML = "";
+        let timebase = 0;
+        async function call() {
+            timebase = Date.now();
+            logOutput.innerHTML = "";
 
-          callButton.disabled = true;
-          hangupButton.disabled = false;
-          console.log('Starting call');
-          startTime = window.performance.now();
-          const videoTracks = localStream.getVideoTracks();
-          const audioTracks = localStream.getAudioTracks();
-          if (videoTracks.length > 0) {
-              console.log(`Using video device: ${videoTracks[0].label}`);
-          }
-          if (audioTracks.length > 0) {
-              console.log(`Using audio device: ${audioTracks[0].label}`);
-          }
+            callButton.disabled = true;
+            hangupButton.disabled = false;
+            console.log('Starting call');
+            startTime = window.performance.now();
+            const videoTracks = localStream.getVideoTracks();
+            const audioTracks = localStream.getAudioTracks();
+            if (videoTracks.length > 0) {
+                console.log(`Using video device: ${videoTracks[0].label}`);
+            }
+            if (audioTracks.length > 0) {
+                console.log(`Using audio device: ${audioTracks[0].label}`);
+            }
 
-          const turnUser = 'test';
-          const turnCred = '111111';
-          let configSet = {
-              "SaudiArabia": {
-                  "TLS443COM": [{ urls: 'turns:158-101-248-79.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "TLS443IO": [{ urls: 'turns:158-101-248-79.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "UDP443": [{ urls: 'turn:158.101.248.79:443?transport=udp', credential: turnCred, username: turnUser }],
-                  "UDP3478": [{ urls: 'turn:158.101.248.79:3478?transport=udp', credential: turnCred, username: turnUser }],
-                  "TCP3478": [{ urls: 'turn:158.101.248.79:3478?transport=tcp', credential: turnCred, username: turnUser }]
-              },
-              "India": {
-                  "TLS443COM": [{ urls: 'turns:128-1-105-152.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "TLS443IO": [{ urls: 'turns:128-1-105-152.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "UDP443": [{ urls: 'turn:128.1.105.152:443?transport=udp', credential: turnCred, username: turnUser }],
-                  "UDP3478": [{ urls: 'turn:128.1.105.152:3478?transport=udp', credential: turnCred, username: turnUser }],
-                  "TCP3478": [{ urls: 'turn:128.1.105.152:3478?transport=tcp', credential: turnCred, username: turnUser }]
-              },
-              "Europe": {
-                  "TLS443COM": [{ urls: 'turns:23-236-110-36.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "TLS443IO": [{ urls: 'turns:23-236-110-36.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "UDP443": [{ urls: 'turn:23.236.110.36:443?transport=udp', credential: turnCred, username: turnUser }],
-                  "UDP3478": [{ urls: 'turn:23.236.110.36:3478?transport=udp', credential: turnCred, username: turnUser }],
-                  "TCP3478": [{ urls: 'turn:23.236.110.36:3478?transport=tcp', credential: turnCred, username: turnUser }]
-              },
-              "NorthAmerica": {
-                  "TLS443COM": [{ urls: 'turns:128-14-247-139.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "TLS443IO": [{ urls: 'turns:128-14-247-139.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
-                  "UDP443": [{ urls: 'turn:128.14.247.139:443?transport=udp', credential: turnCred, username: turnUser }],
-                  "UDP3478": [{ urls: 'turn:128.14.247.139:3478?transport=udp', credential: turnCred, username: turnUser }],
-                  "TCP3478": [{ urls: 'turn:128.14.247.139:3478?transport=tcp', credential: turnCred, username: turnUser }]
-              },
-              "EastAsia": {
-                  "TLS443COM": [{ urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser }],
-                  "TLS443IO": [{ urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser }],
-                  "UDP443": [{ urls: 'turn:183.131.160.209:4430?transport=udp', credential: turnCred, username: turnUser }],
-                  "UDP3478": [{ urls: 'turn:183.131.160.209:3478?transport=udp', credential: turnCred, username: turnUser }],
-                  "TCP3478": [{ urls: 'turn:183.131.160.209:3478?transport=tcp', credential: turnCred, username: turnUser }]
-              }
-          };
+            const turnUser = 'test';
+            const turnCred = '111111';
+            let configSet = {
+                "SaudiArabia": {
+                    "TLS443COM": [{ urls: 'turns:158-101-248-79.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "TLS443IO": [{ urls: 'turns:158-101-248-79.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "UDP443": [{ urls: 'turn:158.101.248.79:443?transport=udp', credential: turnCred, username: turnUser }],
+                    "UDP3478": [{ urls: 'turn:158.101.248.79:3478?transport=udp', credential: turnCred, username: turnUser }],
+                    "TCP3478": [{ urls: 'turn:158.101.248.79:3478?transport=tcp', credential: turnCred, username: turnUser }]
+                },
+                "India": {
+                    "TLS443COM": [{ urls: 'turns:128-1-105-152.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "TLS443IO": [{ urls: 'turns:128-1-105-152.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "UDP443": [{ urls: 'turn:128.1.105.152:443?transport=udp', credential: turnCred, username: turnUser }],
+                    "UDP3478": [{ urls: 'turn:128.1.105.152:3478?transport=udp', credential: turnCred, username: turnUser }],
+                    "TCP3478": [{ urls: 'turn:128.1.105.152:3478?transport=tcp', credential: turnCred, username: turnUser }]
+                },
+                "Europe": {
+                    "TLS443COM": [{ urls: 'turns:23-236-110-36.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "TLS443IO": [{ urls: 'turns:23-236-110-36.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "UDP443": [{ urls: 'turn:23.236.110.36:443?transport=udp', credential: turnCred, username: turnUser }],
+                    "UDP3478": [{ urls: 'turn:23.236.110.36:3478?transport=udp', credential: turnCred, username: turnUser }],
+                    "TCP3478": [{ urls: 'turn:23.236.110.36:3478?transport=tcp', credential: turnCred, username: turnUser }]
+                },
+                "NorthAmerica": {
+                    "TLS443COM": [{ urls: 'turns:128-14-247-139.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "TLS443IO": [{ urls: 'turns:128-14-247-139.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                    "UDP443": [{ urls: 'turn:128.14.247.139:443?transport=udp', credential: turnCred, username: turnUser }],
+                    "UDP3478": [{ urls: 'turn:128.14.247.139:3478?transport=udp', credential: turnCred, username: turnUser }],
+                    "TCP3478": [{ urls: 'turn:128.14.247.139:3478?transport=tcp', credential: turnCred, username: turnUser }]
+                },
+                "EastAsia": {
+                    "TLS443COM": [{ urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser }],
+                    "TLS443IO": [{ urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser }],
+                    "UDP443": [{ urls: 'turn:183.131.160.209:4430?transport=udp', credential: turnCred, username: turnUser }],
+                    "UDP3478": [{ urls: 'turn:183.131.160.209:3478?transport=udp', credential: turnCred, username: turnUser }],
+                    "TCP3478": [{ urls: 'turn:183.131.160.209:3478?transport=tcp', credential: turnCred, username: turnUser }]
+                }
+            };
 
-          let configuration = {
-              "iceServers": configSet[document.getElementById('regionSelect').value][document.getElementById('protoSelect').value],
-              "iceTransportPolicy": 'relay'
-          };
+            let configuration = {
+                "iceServers": configSet[document.getElementById('regionSelect').value][document.getElementById('protoSelect').value],
+                "iceTransportPolicy": 'relay'
+            };
 
-          console.log('RTCPeerConnection configuration:', configuration);
-          pc1 = new RTCPeerConnection(configuration);
-          Info('Created local peer connection object pc1');
-          console.log('Created local peer connection object pc1');
-          pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
-          pc1.addEventListener('icecandidateerror', e => onIceCandidateError(pc1, e));
-          pc2 = new RTCPeerConnection(configuration);
-          Info('Created remote peer connection object pc2');
-          console.log('Created remote peer connection object pc2');
-          pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
-          pc2.addEventListener('icecandidateerror', e => onIceCandidateError(pc2, e));
-          pc1.addEventListener("connectionstatechange", e => onConnectionStateChange(pc1, e));
-          pc2.addEventListener("connectionstatechange", e => onConnectionStateChange(pc2, e));
-          pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
-          pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc2, e));
-          pc2.addEventListener('track', gotRemoteStream);
+            console.log('RTCPeerConnection configuration:', configuration);
+            pc1 = new RTCPeerConnection(configuration);
+            Info('Created local peer connection object pc1');
+            console.log('Created local peer connection object pc1');
+            pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
+            pc1.addEventListener('icecandidateerror', e => onIceCandidateError(pc1, e));
+            pc2 = new RTCPeerConnection(configuration);
+            Info('Created remote peer connection object pc2');
+            console.log('Created remote peer connection object pc2');
+            pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
+            pc2.addEventListener('icecandidateerror', e => onIceCandidateError(pc2, e));
+            pc1.addEventListener("connectionstatechange", e => onConnectionStateChange(pc1, e));
+            pc2.addEventListener("connectionstatechange", e => onConnectionStateChange(pc2, e));
+            pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
+            pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc2, e));
+            pc2.addEventListener('track', gotRemoteStream);
 
-          localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
-          console.log('Added local stream to pc1');
+            localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
+            console.log('Added local stream to pc1');
 
-          try {
-              Info('pc1 createOffer start');
-              console.log('pc1 createOffer start');
-              const offer = await pc1.createOffer(offerOptions);
-              await onCreateOfferSuccess(offer);
-          } catch (e) {
-              onCreateSessionDescriptionError(e);
-          }
-      }
+            try {
+                Info('pc1 createOffer start');
+                console.log('pc1 createOffer start');
+                const offer = await pc1.createOffer(offerOptions);
+                await onCreateOfferSuccess(offer);
+            } catch (e) {
+                onCreateSessionDescriptionError(e);
+            }
+        }
 
-      function onCreateSessionDescriptionError(error) {
-          Error(`Failed to create session description: ${error.toString()}`);
-          console.log(`Failed to create session description: ${error.toString()}`);
-      }
+        function onCreateSessionDescriptionError(error) {
+            Error(`Failed to create session description: ${error.toString()}`);
+            console.log(`Failed to create session description: ${error.toString()}`);
+        }
 
-      async function onCreateOfferSuccess(desc) {
-          console.log(`Offer from pc1\n${desc.sdp}`);
-          Info('pc1 setLocalDescription start');
-          console.log('pc1 setLocalDescription start');
-          try {
-              await pc1.setLocalDescription(desc);
-              onSetLocalSuccess(pc1);
-          } catch (e) {
-              onSetSessionDescriptionError();
-          }
+        async function onCreateOfferSuccess(desc) {
+            console.log(`Offer from pc1\n${desc.sdp}`);
+            Info('pc1 setLocalDescription start');
+            console.log('pc1 setLocalDescription start');
+            try {
+                await pc1.setLocalDescription(desc);
+                onSetLocalSuccess(pc1);
+            } catch (e) {
+                onSetSessionDescriptionError();
+            }
 
-          Info('pc2 setRemoteDescription start');
-          console.log('pc2 setRemoteDescription start');
-          try {
-              await pc2.setRemoteDescription(desc);
-              onSetRemoteSuccess(pc2);
-          } catch (e) {
-              onSetSessionDescriptionError();
-          }
+            Info('pc2 setRemoteDescription start');
+            console.log('pc2 setRemoteDescription start');
+            try {
+                await pc2.setRemoteDescription(desc);
+                onSetRemoteSuccess(pc2);
+            } catch (e) {
+                onSetSessionDescriptionError();
+            }
 
-          Info('pc2 createAnswer start');
-          console.log('pc2 createAnswer start');
-          // Since the 'remote' side has no media stream we need
-          // to pass in the right constraints in order for it to
-          // accept the incoming offer of audio and video.
-          try {
-              const answer = await pc2.createAnswer();
-              await onCreateAnswerSuccess(answer);
-          } catch (e) {
-              onCreateSessionDescriptionError(e);
-          }
-      }
+            Info('pc2 createAnswer start');
+            console.log('pc2 createAnswer start');
+            // Since the 'remote' side has no media stream we need
+            // to pass in the right constraints in order for it to
+            // accept the incoming offer of audio and video.
+            try {
+                const answer = await pc2.createAnswer();
+                await onCreateAnswerSuccess(answer);
+            } catch (e) {
+                onCreateSessionDescriptionError(e);
+            }
+        }
 
-      function onSetLocalSuccess(pc) {
-          Info(`${getName(pc)} setLocalDescription complete`);
-          console.log(`${getName(pc)} setLocalDescription complete`);
-      }
+        function onSetLocalSuccess(pc) {
+            Info(`${getName(pc)} setLocalDescription complete`);
+            console.log(`${getName(pc)} setLocalDescription complete`);
+        }
 
-      function onSetRemoteSuccess(pc) {
-          Info(`${getName(pc)} setRemoteDescription complete`);
-          console.log(`${getName(pc)} setRemoteDescription complete`);
-      }
+        function onSetRemoteSuccess(pc) {
+            Info(`${getName(pc)} setRemoteDescription complete`);
+            console.log(`${getName(pc)} setRemoteDescription complete`);
+        }
 
-      function onSetSessionDescriptionError(error) {
-          Error(`Failed to set session description: ${error.toString()}`);
-          console.log(`Failed to set session description: ${error.toString()}`);
-      }
+        function onSetSessionDescriptionError(error) {
+            Error(`Failed to set session description: ${error.toString()}`);
+            console.log(`Failed to set session description: ${error.toString()}`);
+        }
 
-      function gotRemoteStream(e) {
-          if (remoteVideo.srcObject !== e.streams[0]) {
-              remoteVideo.srcObject = e.streams[0];
-              Info('pc2 received remote stream');
-              console.log('pc2 received remote stream');
-          }
-      }
+        function gotRemoteStream(e) {
+            if (remoteVideo.srcObject !== e.streams[0]) {
+                remoteVideo.srcObject = e.streams[0];
+                Info('pc2 received remote stream');
+                console.log('pc2 received remote stream');
+            }
+        }
 
-      async function onCreateAnswerSuccess(desc) {
-          console.log(`Answer from pc2:\n${desc.sdp}`);
-          Info('pc2 setLocalDescription start');
-          console.log('pc2 setLocalDescription start');
-          try {
-              await pc2.setLocalDescription(desc);
-              onSetLocalSuccess(pc2);
-          } catch (e) {
-              onSetSessionDescriptionError(e);
-          }
-          Info('pc1 setRemoteDescription start');
-          console.log('pc1 setRemoteDescription start');
-          try {
-              await pc1.setRemoteDescription(desc);
-              onSetRemoteSuccess(pc1);
-          } catch (e) {
-              onSetSessionDescriptionError(e);
-          }
-      }
+        async function onCreateAnswerSuccess(desc) {
+            console.log(`Answer from pc2:\n${desc.sdp}`);
+            Info('pc2 setLocalDescription start');
+            console.log('pc2 setLocalDescription start');
+            try {
+                await pc2.setLocalDescription(desc);
+                onSetLocalSuccess(pc2);
+            } catch (e) {
+                onSetSessionDescriptionError(e);
+            }
+            Info('pc1 setRemoteDescription start');
+            console.log('pc1 setRemoteDescription start');
+            try {
+                await pc1.setRemoteDescription(desc);
+                onSetRemoteSuccess(pc1);
+            } catch (e) {
+                onSetSessionDescriptionError(e);
+            }
+        }
 
-      async function onIceCandidate(pc, event) {
-          try {
-              await (getOtherPc(pc).addIceCandidate(event.candidate));
-              onAddIceCandidateSuccess(pc);
-          } catch (e) {
-              onAddIceCandidateError(pc, e);
-          }
-          Info(`${getName(pc)} ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'} url=${event.candidate ? event.candidate.url : '(null)'}`);
-          console.log(`${getName(pc)} ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'}`, event);
-      }
+        async function onIceCandidate(pc, event) {
+            try {
+                await (getOtherPc(pc).addIceCandidate(event.candidate));
+                onAddIceCandidateSuccess(pc);
+            } catch (e) {
+                onAddIceCandidateError(pc, e);
+            }
+            Info(`${getName(pc)} ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'} url=${event.candidate ? event.candidate.url : '(null)'}`);
+            console.log(`${getName(pc)} ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'}`, event);
+        }
 
-      function onIceCandidateError(pc, event) {
-          Error(`${getName(pc)} ICE candidate error: host=${event.hostCandidate} port=${event.port} url=${event.url} err=${event.errorCode}:${event.errorText}`);
-          console.log(`${getName(pc)} ICE candidate error: `, event);
-      }
+        function onIceCandidateError(pc, event) {
+            Error(`${getName(pc)} ICE candidate error: host=${event.hostCandidate} port=${event.port} url=${event.url} err=${event.errorCode}:${event.errorText}`);
+            console.log(`${getName(pc)} ICE candidate error: `, event);
+        }
 
-      function onAddIceCandidateSuccess(pc) {
-          Info(`${getName(pc)} addIceCandidate success`);
-          console.log(`${getName(pc)} addIceCandidate success`);
-      }
+        function onAddIceCandidateSuccess(pc) {
+            Info(`${getName(pc)} addIceCandidate success`);
+            console.log(`${getName(pc)} addIceCandidate success`);
+        }
 
-      function onAddIceCandidateError(pc, error) {
-          Error(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
-          console.log(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
-      }
+        function onAddIceCandidateError(pc, error) {
+            Error(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
+            console.log(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
+        }
 
         function indicatePcStat(pc) {
             if (pc) {
@@ -677,64 +687,65 @@
             }
         }
 
-      function onConnectionStateChange(pc, event) {
-          if (pc) {
-              indicatePcStat(pc);
-              console.log(`${getName(pc)} PC state: ${pc.connectionState}`);
-              Info(`${getName(pc)} PC state: ${pc.connectionState}`);
-              console.log('PC state change event: ', event);
-          }          
-      }
+        function onConnectionStateChange(pc, event) {
+            if (pc) {
+                indicatePcStat(pc);
+                console.log(`${getName(pc)} PC state: ${pc.connectionState}`);
+                Info(`${getName(pc)} PC state: ${pc.connectionState}`);
+                console.log('PC state change event: ', event);
+            }
+        }
 
-      function onIceStateChange(pc, event) {
-          if (pc) {
-              console.log(`${getName(pc)} ICE state: ${pc.iceConnectionState}`);
-              Info(`${getName(pc)} ICE state: ${pc.iceConnectionState}`);
-              console.log('ICE state change event: ', event);
-          }
-      }
+        function onIceStateChange(pc, event) {
+            if (pc) {
+                console.log(`${getName(pc)} ICE state: ${pc.iceConnectionState}`);
+                Info(`${getName(pc)} ICE state: ${pc.iceConnectionState}`);
+                console.log('ICE state change event: ', event);
+            }
+        }
 
-      function hangup() {
-          console.log('Ending call');
-          pc1.close();
-          pc2.close();
-          indicatePcStat(pc1)
-          indicatePcStat(pc2)
-          pc1 = null;
-          pc2 = null;
-          hangupButton.disabled = true;
-          callButton.disabled = false;
-      }
+        function hangup() {
+            console.log('Ending call');
+            pc1.close();
+            pc2.close();
+            indicatePcStat(pc1)
+            indicatePcStat(pc2)
+            pc1 = null;
+            pc2 = null;
+            hangupButton.disabled = true;
+            callButton.disabled = false;
+        }
 
-      let logOutput = document.getElementById('logOutput');
+        let logOutput = document.getElementById('logOutput');
 
-      function getTimeOffset() {
-          let ms = (Date.now() - timebase) % 1000;
-          let allsec = (Date.now() - timebase) / 1000;
-          let sec = Math.floor(allsec % 60);
-          let allmin = allsec / 60;
-          let min = Math.floor(allmin % 60);
-          let hour = Math.floor(allmin / 60);
-          return `${hour}:${min}:${sec}.${ms}`
-      }
+        function getTimeOffset() {
+            let ms = (Date.now() - timebase) % 1000;
+            let allsec = (Date.now() - timebase) / 1000;
+            let sec = Math.floor(allsec % 60);
+            let allmin = allsec / 60;
+            let min = Math.floor(allmin % 60);
+            let hour = Math.floor(allmin / 60);
+            return `${hour}:${min}:${sec}.${ms}`
+        }
 
-      function _getTimeOffset() {
-          const elapsedTime = window.performance.now() - startTime;
-          const seconds = Math.floor(elapsedTime / 1000000);
-          return seconds + "." + Math.floor(elapsedTime % 1000000);
-      }
+        function _getTimeOffset() {
+            const elapsedTime = window.performance.now() - startTime;
+            const seconds = Math.floor(elapsedTime / 1000000);
+            return seconds + "." + Math.floor(elapsedTime % 1000000);
+        }
 
-      function Info(text) {
-          logOutput.innerHTML += "<p><b>" + getTimeOffset() + "&nbsp" + text + "</b></p>";
-      }
+        function Info(text) {
+            logOutput.innerHTML += "<p><b>" + getTimeOffset() + "&nbsp" + text + "</b></p>";
+        }
 
-      function Error(text) {
-          logOutput.innerHTML += "<p class='errorLog'><b>" + getTimeOffset() + "&nbsp" + text + "</b></p>";
+        function Error(text) {
+            logOutput.innerHTML += "<p class='errorLog'><b>" + getTimeOffset() + "&nbsp" + text + "</b></p>";
 
-      }
+        }
 
     </script>
 
 
-  </body>
+</body>
+
 </html>
