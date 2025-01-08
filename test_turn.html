@@ -360,7 +360,9 @@
           <option value="EastAsia">East Asia</option>
         </select>
         <select name="proto" id="protoSelect">
-          <option value="TLS443">TCP 443</option>
+          <option value="TLS443IO">TCP 443 .io</option>
+          <option value="TLS443COM">TCP 443 .com</option>
+          <option value="UDP443">UDP 443</option>
           <option value="TCP3478">TCP 3478</option>
           <option value="UDP3478">UDP 3478</option>
         </select>
@@ -474,30 +476,40 @@
           const turnCred = '111111';
           let configSet = {
               "SaudiArabia": {
-                  "TLS443":  [{urls: 'turns:158-101-248-79.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                              {urls: 'turns:158-101-248-79.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
-                  "UDP3478": [{urls: 'turn:158.101.248.79:3478?transport=udp', credential: turnCred, username: turnUser}],
-                  "TCP3478": [{urls: 'turn:158.101.248.79:3478?transport=tcp', credential: turnCred, username: turnUser}]},
-              "India":       {
-                  "TLS443":  [{urls: 'turns:128-1-105-152.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                              {urls: 'turns:128-1-105-152.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
-                  "UDP3478": [{urls: 'turn:128.1.105.152:3478?transport=udp', credential: turnCred, username: turnUser}],
-                  "TCP3478": [{urls: 'turn:128.1.105.152:3478?transport=tcp', credential: turnCred, username: turnUser}]},
-              "Europe":      {
-                  "TLS443":  [{urls: 'turns:23-236-110-36.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                              {urls: 'turns:23-236-110-36.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
-                  "UDP3478": [{urls: 'turn:23.236.110.36:3478?transport=udp', credential: turnCred, username: turnUser}],
-                  "TCP3478": [{urls: 'turn:23.236.110.36:3478?transport=tcp', credential: turnCred, username: turnUser}]},
-              "NorthAmerica":{
-                  "TLS443":  [{urls: 'turns:128-14-247-139.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser},
-                              {urls: 'turns:128-14-247-139.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser}],
-                  "UDP3478": [{urls: 'turn:128.14.247.139:3478?transport=udp', credential: turnCred, username: turnUser}],
-                  "TCP3478": [{urls: 'turn:128.14.247.139:3478?transport=tcp', credential: turnCred, username: turnUser}]},
-              "EastAsia":    {
-                  'TLS443':  [{urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser},
-                              {urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:4430?transport=tcp', credential: turnCred, username: turnUser}],
-                  "UDP3478": [{urls: 'turn:183.131.160.209:3478?transport=udp', credential: turnCred, username: turnUser}],
-                  "TCP3478": [{urls: 'turn:183.131.160.209:3478?transport=tcp', credential: turnCred, username: turnUser}]}
+                  "TLS443COM": [{ urls: 'turns:158-101-248-79.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "TLS443IO": [{ urls: 'turns:158-101-248-79.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "UDP443": [{ urls: 'turn:158.101.248.79:443?transport=udp', credential: turnCred, username: turnUser }],
+                  "UDP3478": [{ urls: 'turn:158.101.248.79:3478?transport=udp', credential: turnCred, username: turnUser }],
+                  "TCP3478": [{ urls: 'turn:158.101.248.79:3478?transport=tcp', credential: turnCred, username: turnUser }]
+              },
+              "India": {
+                  "TLS443COM": [{ urls: 'turns:128-1-105-152.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "TLS443IO": [{ urls: 'turns:128-1-105-152.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "UDP443": [{ urls: 'turn:128.1.105.152:443?transport=udp', credential: turnCred, username: turnUser }],
+                  "UDP3478": [{ urls: 'turn:128.1.105.152:3478?transport=udp', credential: turnCred, username: turnUser }],
+                  "TCP3478": [{ urls: 'turn:128.1.105.152:3478?transport=tcp', credential: turnCred, username: turnUser }]
+              },
+              "Europe": {
+                  "TLS443COM": [{ urls: 'turns:23-236-110-36.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "TLS443IO": [{ urls: 'turns:23-236-110-36.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "UDP443": [{ urls: 'turn:23.236.110.36:443?transport=udp', credential: turnCred, username: turnUser }],
+                  "UDP3478": [{ urls: 'turn:23.236.110.36:3478?transport=udp', credential: turnCred, username: turnUser }],
+                  "TCP3478": [{ urls: 'turn:23.236.110.36:3478?transport=tcp', credential: turnCred, username: turnUser }]
+              },
+              "NorthAmerica": {
+                  "TLS443COM": [{ urls: 'turns:128-14-247-139.edge.sd-rtn.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "TLS443IO": [{ urls: 'turns:128-14-247-139.edge.agora.io:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "UDP443": [{ urls: 'turn:128.14.247.139:443?transport=udp', credential: turnCred, username: turnUser }],
+                  "UDP3478": [{ urls: 'turn:128.14.247.139:3478?transport=udp', credential: turnCred, username: turnUser }],
+                  "TCP3478": [{ urls: 'turn:128.14.247.139:3478?transport=tcp', credential: turnCred, username: turnUser }]
+              },
+              "EastAsia": {
+                  "TLS443COM": [{ urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "TLS443IO": [{ urls: 'turns:183-131-160-209.edge.staging-1-aws.myagoralab.com:443?transport=tcp', credential: turnCred, username: turnUser }],
+                  "UDP443": [{ urls: 'turn:183.131.160.209:443?transport=udp', credential: turnCred, username: turnUser }],
+                  "UDP3478": [{ urls: 'turn:183.131.160.209:3478?transport=udp', credential: turnCred, username: turnUser }],
+                  "TCP3478": [{ urls: 'turn:183.131.160.209:3478?transport=tcp', credential: turnCred, username: turnUser }]
+              }
           };
 
           let configuration = {
