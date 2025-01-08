@@ -351,6 +351,13 @@
       <video id="localVideo" playsinline autoplay muted></video>
       <video id="remoteVideo" playsinline autoplay></video>
 
+      <table>
+        <tr>
+            <td><div id="pc1Stat" style="width:10px;height:10px;background-color:gray;"></div></td>
+            <td><div id="pc2Stat" style="width:10px;height:10px;background-color:gray"></div></td>
+        </tr>
+      </table>
+
       <div class="box">
         <select name="region" id="regionSelect">
           <option value="SaudiArabia">Saudi Arabia</option>
@@ -654,8 +661,25 @@
           console.log(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
       }
 
+        function indicatePcStat(pc) {
+            if (pc) {
+                const pcId = getName(pc);
+                const pcStatDiv = document.getElementById(`${pcId}Stat`);
+                if (pc.connectionState === 'connected') {
+                    pcStatDiv.style.backgroundColor = 'green';
+                } else if (pc.connectionState === 'failed') {
+                    pcStatDiv.style.backgroundColor = 'red';
+                } else if (pc.connectionState === 'connecting') {
+                    pcStatDiv.style.backgroundColor = 'yellow';
+                } else {
+                    pcStatDiv.style.backgroundColor = 'grey';
+                }
+            }
+        }
+
       function onConnectionStateChange(pc, event) {
           if (pc) {
+              indicatePcStat(pc);
               console.log(`${getName(pc)} PC state: ${pc.connectionState}`);
               Info(`${getName(pc)} PC state: ${pc.connectionState}`);
               console.log('PC state change event: ', event);
@@ -674,6 +698,8 @@
           console.log('Ending call');
           pc1.close();
           pc2.close();
+          indicatePcStat(pc1)
+          indicatePcStat(pc2)
           pc1 = null;
           pc2 = null;
           hangupButton.disabled = true;
