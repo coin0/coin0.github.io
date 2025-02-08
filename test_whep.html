@@ -6,9 +6,8 @@
    <title>Web Player</title>
  </head>
  <body style="height: 100%; margin:0 auto;">
-   <button onclick="javascript:play();">play</button>
    <video id="video-box" style="background-color:#ccc" autoplay></video>
-   </div>
+   <button onclick="javascript:play();">play</button>
    <p id="localsdp"></p>
  </body>
  <script>
@@ -54,41 +53,48 @@
 
            // TODO
 
+           // Stretch video tag to full document while maintaining aspect ratio
+           let videoBox = document.getElementById('video-box');
+           videoBox.style.width = '90%';
+           videoBox.style.height = '90%';
+           videoBox.style.objectFit = 'contain';
+           resolutionWidth = 1280;
+           resolutionHeight = 720;
+
            document.addEventListener('keydown', (event) => {
-               // Check which key was pressed
-               switch (event.key) {
-                   case 'ArrowUp':
-                   case 'ArrowDown':
-                   case 'ArrowLeft':
-                   case 'ArrowRight':
-                   case ' ':
-                       // Send the key event via the DataChannel
-                       console.log("dc state: " + dc.readyState)
-                       dc.send(JSON.stringify({ type: 'keydown', key: event.key }));
-                       break;
-                   default:
-                       // Handle other key presses
-                       console.log(`Key pressed: ${event.key}`);
-                       break;
-               }
+               // Send the key event via the DataChannel
+               dc.send(JSON.stringify({ type: 'keydown', key: event.key }));
            });
 
            document.addEventListener('keyup', (event) => {
-               // Check which key was released
-               switch (event.key) {
-                   case 'ArrowUp':
-                   case 'ArrowDown':
-                   case 'ArrowLeft':
-                   case 'ArrowRight':
-                   case ' ':
-                       // Send the key event via the DataChannel
-                       console.log("dc state: " + dc.readyState)
-                       dc.send(JSON.stringify({ type: 'keyup', key: event.key }));
-                       break;
-                   default:
-                       // Handle other key releases
-                       console.log(`Key released: ${event.key}`);
-                       break;
+               // Send the key event via the DataChannel
+               dc.send(JSON.stringify({ type: 'keyup', key: event.key }));
+           });
+
+           document.addEventListener('mousedown', (event) => {
+               if (event.target === videoBox) {
+                   let rect = videoBox.getBoundingClientRect();
+                   let x = Math.floor((event.clientX - rect.left) / rect.width * resolutionWidth);
+                   let y = Math.floor((event.clientY - rect.top) / rect.height * resolutionHeight);
+                   dc.send(JSON.stringify({ type: 'mousedown', x: x, y: y, button: event.button }));
+               }
+           });
+
+           document.addEventListener('mouseup', (event) => {
+               if (event.target === videoBox) {
+                   let rect = videoBox.getBoundingClientRect();
+                   let x = Math.floor((event.clientX - rect.left) / rect.width * resolutionWidth);
+                   let y = Math.floor((event.clientY - rect.top) / rect.height * resolutionHeight);
+                   dc.send(JSON.stringify({ type: 'mouseup', x: x, y: y, button: event.button }));
+               }
+           });
+
+           document.addEventListener('mousemove', (event) => {
+               if (event.target === videoBox) {
+                   let rect = videoBox.getBoundingClientRect();
+                   let x = Math.floor((event.clientX - rect.left) / rect.width * resolutionWidth);
+                   let y = Math.floor((event.clientY - rect.top) / rect.height * resolutionHeight);
+                   dc.send(JSON.stringify({ type: 'mousemove', x: x, y: y }));
                }
            });
    }
