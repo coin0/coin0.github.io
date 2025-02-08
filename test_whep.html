@@ -7,14 +7,29 @@
  </head>
  <body style="height: 100%; margin:0 auto;">
    <button onclick="javascript:play();">play</button>
-   <div id="video-box" style="width:640px;height:480px;background-color:#ccc"></div>
+   <video id="video-box" style="background-color:#ccc" autoplay></video>
+   </div>
    <p id="localsdp"></p>
  </body>
  <script>
    let pc = new RTCPeerConnection();
-   const dc = pc.createDataChannel("whatever");
+   const dc = pc.createDataChannel("whatever", {reliable: false});
+   dc.onopen = onDCStateChange;
+   dc.onclose = onDCStateChange;
+
+   function onDCStateChange() {
+       console.log('dc state changed to ' + dc.readyState);
+   }
 
    function play() {
+       pc.addEventListener('track', (e) => {
+           let remoteVideo = document.getElementById('video-box');
+           if (remoteVideo.srcObject !== e.streams[0]) {
+               remoteVideo.srcObject = e.streams[0];
+               console.log('pc received remote stream:', e);
+           }
+       });
+
        pc.createOffer({offerToReceiveAudio: true, offerToReceiveVideo: true })
            .then((offer) => {
                console.log(offer);
@@ -35,6 +50,46 @@
            })
            .catch((reason) => {
                console.error(reason);
+           });
+
+           // TODO
+
+           document.addEventListener('keydown', (event) => {
+               // Check which key was pressed
+               switch (event.key) {
+                   case 'ArrowUp':
+                   case 'ArrowDown':
+                   case 'ArrowLeft':
+                   case 'ArrowRight':
+                   case ' ':
+                       // Send the key event via the DataChannel
+                       console.log("dc state: " + dc.readyState)
+                       dc.send(JSON.stringify({ type: 'keydown', key: event.key }));
+                       break;
+                   default:
+                       // Handle other key presses
+                       console.log(`Key pressed: ${event.key}`);
+                       break;
+               }
+           });
+
+           document.addEventListener('keyup', (event) => {
+               // Check which key was released
+               switch (event.key) {
+                   case 'ArrowUp':
+                   case 'ArrowDown':
+                   case 'ArrowLeft':
+                   case 'ArrowRight':
+                   case ' ':
+                       // Send the key event via the DataChannel
+                       console.log("dc state: " + dc.readyState)
+                       dc.send(JSON.stringify({ type: 'keyup', key: event.key }));
+                       break;
+                   default:
+                       // Handle other key releases
+                       console.log(`Key released: ${event.key}`);
+                       break;
+               }
            });
    }
  </script>
