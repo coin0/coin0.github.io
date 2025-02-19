@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.1/jsrsasign-all-min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: bold;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        input[disabled] {
+            background-color: #e9e9e9;
+            cursor: not-allowed;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #generateJWT {
+            display: block;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        #jwtToken {
+            margin-top: 1rem;
+            height: 100px;
+            resize: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>JWT Generator</h1>
+        <div class="form-group">
+            <label for="version">Version:</label>
+            <input type="text" id="version" value="1.0" disabled>
+        </div>
+        <div class="form-group">
+            <label for="appID">App ID:</label>
+            <input type="text" id="appID">
+        </div>
+        <div class="form-group">
+            <label for="exp">Exp:</label>
+            <input type="text" id="exp">
+            <button onclick="setCurrentTimestamp()">Get Current Timestamp</button>
+        </div>
+        <div class="form-group">
+            <label for="secret">Secret:</label>
+            <input type="text" id="secret">
+        </div>
+        <button id="generateJWT" onclick="generateJWT()">Generate JWT</button>
+        <div class="form-group">
+            <label for="jwtToken">JWT Token:</label>
+            <textarea id="jwtToken" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        function setCurrentTimestamp() {
+            document.getElementById('exp').value = Math.floor(Date.now() / 1000);
+        }
+
+        function generateJWT() {
+            const version = document.getElementById('version').value;
+            const appID = document.getElementById('appID').value;
+            const exp = document.getElementById('exp').value;
+            const secret = document.getElementById('secret').value;
+
+            if (!appID || !exp || !secret) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            const header = {
+                alg: 'HS256',
+                typ: 'JWT'
+            };
+
+            const payload = {
+                version: version,
+                appID: appID,
+                exp: parseInt(exp)
+            };
+
+            const token = KJUR.jws.JWS.sign(null, header, payload, secret);
+            document.getElementById('jwtToken').value = token;
+        }
+    </script>
+</body>
+</html>
