@@ -50,7 +50,7 @@
             cursor: not-allowed;
         }
         button {
-            background-color: #4CAF50;
+            background-color: #007bff;
             color: white;
             padding: 0.5rem 1rem;
             border: none;
@@ -60,7 +60,7 @@
             transition: background-color 0.3s;
         }
         button:hover {
-            background-color: #45a049;
+            background-color: #0056b3;
         }
         #generateJWT {
             display: block;
@@ -71,6 +71,30 @@
             margin-top: 1rem;
             height: 100px;
             resize: none;
+        }
+        /* Add style for time buttons container */
+        .time-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .time-buttons button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.9rem;
+            background-color: #007bff;
+        }
+        /* Copy button styling */
+        .copy-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .copy-button {
+            background-color: #007bff;
+            padding: 0.25rem 0.75rem;
+        }
+        .copy-button:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
@@ -88,22 +112,40 @@
         <div class="form-group">
             <label for="exp">Exp:</label>
             <input type="text" id="exp">
-            <button onclick="setCurrentTimestamp()">Get Current Timestamp</button>
+            <div class="time-buttons">
+                <button onclick="addTime(0)">Get Current Time</button>
+                <button onclick="addTime(30)">+30s</button>
+                <button onclick="addTime(60)">+1m</button>
+                <button onclick="addTime(300)">+5m</button>
+                <button onclick="addTime(600)">+10m</button>
+                <button onclick="addTime(3600)">+1h</button>
+            </div>
         </div>
         <div class="form-group">
             <label for="secret">Secret:</label>
             <input type="text" id="secret">
         </div>
         <button id="generateJWT" onclick="generateJWT()">Generate JWT</button>
+        <br>
         <div class="form-group">
-            <label for="jwtToken">JWT Token:</label>
+            <div class="copy-container">
+                <label for="jwtToken">JWT Token:</label>
+            </div>
             <textarea id="jwtToken" readonly></textarea>
+            <button class="copy-button" onclick="copyJWT()">Copy</button>
         </div>
     </div>
 
     <script>
+        function addTime(seconds) {
+            const expInput = document.getElementById('exp');
+            const currentTime = Math.floor(Date.now() / 1000);
+            expInput.value = currentTime + seconds;
+        }
+
+        // Update existing timestamp function to use addTime
         function setCurrentTimestamp() {
-            document.getElementById('exp').value = Math.floor(Date.now() / 1000);
+            addTime(0);  // Adds 0 seconds = current time
         }
 
         function generateJWT() {
@@ -131,6 +173,17 @@
             const token = KJUR.jws.JWS.sign(null, header, payload, secret);
             document.getElementById('jwtToken').value = token;
         }
+        function copyJWT() {
+            const jwtTextarea = document.getElementById('jwtToken');
+            if (jwtTextarea.value) {
+                jwtTextarea.select();
+                document.execCommand('copy');
+                alert('Copied to clipboard!');
+            } else {
+                alert('No JWT token to copy');
+            }
+        }
+
     </script>
 </body>
 </html>
