@@ -135,12 +135,15 @@
             margin-top: 1rem;
             padding: 1rem;
             border-radius: 4px;
+            display: none;
         }
         .test-result.success {
+            display: block;
             background-color: #d4edda;
             color: #155724;
         }
         .test-result.error {
+            display: block;
             background-color: #f8d7da;
             color: #721c24;
         }
@@ -197,21 +200,23 @@
             </div>
         </div>
         <div id="webrtc-tab" class="tab-content" style="display: none;">
-            <h1>ICE Server Test</h1>
+            <h1>WebRTC ICE Server Test</h1>
             <div class="form-group">
-                <label for="iceUrl">STUN/TURN Server:</label>
-                <input type="text" id="iceUrl" placeholder="turn:global.turn.server:3478?transport=udp">
+                <label for="webrtc-config">Paste WebRTC Config JSON:</label>
+                <textarea id="webrtc-config" rows="10" placeholder='{"iceServers": [{"urls": "stun:example.com"}]}'></textarea>
             </div>
-            <div class="form-group">
-                <label for="iceUsername">Username:</label>
-                <input type="text" id="iceUsername">
-            </div>
-            <div class="form-group">
-                <label for="iceCredential">Credential:</label>
-                <input type="text" id="iceCredential">
-            </div>
-            <button onclick="testIceConfiguration()">Test Configuration</button>
-            <div id="testResult" class="test-result"></div>
+            <button onclick="testWebRTCConfig()">Test ICE Servers</button>
+            <div id="webrtc-test-result" class="test-result"></div>
+            <table id="candidate-table">
+                <thead>
+                    <tr>
+                        <th>Candidate Type</th>
+                        <th>IP Address</th>
+                        <th>Port</th>
+                    </tr>
+                </thead>
+                <tbody id="candidate-table-body"></tbody>
+            </table>
         </div>
     </div>
 
@@ -327,44 +332,57 @@
             event.currentTarget.classList.add('active');
         }
 
-        // WebRTC test function
-        async function testIceConfiguration() {
-            const config = {
-                iceServers: [{
-                    urls: document.getElementById('iceUrl').value.split(','),
-                    username: document.getElementById('iceUsername').value,
-                    credential: document.getElementById('iceCredential').value
-                }]
-            };
-
-            const resultDiv = document.getElementById('testResult');
+        async function testWebRTCConfig() {
+            const resultDiv = document.getElementById('webrtc-test-result');
             resultDiv.className = 'test-result';
             resultDiv.textContent = 'Testing...';
-
+    
             try {
+                const configStr = document.getElementById('webrtc-config').value;
+                const config = JSON.parse(configStr);
+    
+                if (!config.iceServers || !Array.isArray(config.iceServers)) {
+                    throw new Error('Invalid iceServers configuration in JSON');
+                }
+                config.iceTransportPolicy = "relay";
+    
                 const pc = new RTCPeerConnection(config);
-                
-                pc.onicecandidate = (e) => {
-                    if (e.candidate) {
+                const candidateTableBody = document.getElementById('candidate-table-body');
+    
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        const candidate = event.candidate;
+                        const row = candidateTableBody.insertRow();
+                        const typeCell = row.insertCell(0);
+                        const ipCell = row.insertCell(1);
+                        const portCell = row.insertCell(2);
+    
+                        typeCell.textContent = candidate.type;
+                        ipCell.textContent = candidate.address;
+                        portCell.textContent = candidate.port;
+    
                         resultDiv.className = 'test-result success';
-                        resultDiv.textContent = '✅ Success: Received ICE candidate';
-                        pc.close();
+                        resultDiv.textContent = 'ICE servers are working!';
+                    } else {
+                        resultDiv.className = 'test-result success';
+                        resultDiv.textContent = 'ICE candidate gathering completed.';
                     }
                 };
-
+    
                 pc.oniceconnectionstatechange = () => {
                     if (pc.iceConnectionState === 'failed') {
                         resultDiv.className = 'test-result error';
-                        resultDiv.textContent = '❌ Connection failed';
+                        resultDiv.textContent = 'ICE connection failed.';
                         pc.close();
                     }
                 };
-
-                pc.createDataChannel('test');
-                await pc.createOffer();
+    
+                pc.createDataChannel('test-channel');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
             } catch (error) {
                 resultDiv.className = 'test-result error';
-                resultDiv.textContent = `❌ Error: ${error.message}`;
+                resultDiv.textContent = `Error: ${error.message}`;
             }
         }
     </script>
