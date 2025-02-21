@@ -6,7 +6,7 @@
     <title>Turn JWT Generator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.1/jsrsasign-all-min.js"></script>
     <style>
-        body {
+       body {
             font-family: Arial, sans-serif;
             background-color: #f0f0f0;
             display: flex;
@@ -103,55 +103,116 @@
         }
         textarea {
             background-color: #e9e9e9;
-        }        
+        }
+        .tabs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            background-color: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+        }
+        .tab-button.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .test-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 4px;
+        }
+        .test-result.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .test-result.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Turn JWT Generator</h1>
-        <div class="form-group">
-            <label for="version">Version:</label>
-            <input type="text" id="version" value="1.0" disabled>
-        </div>
-        <div class="form-group">
-            <label for="appID">App ID:</label>
-            <input type="text" id="appID" value="">
-        </div>
-        <div class="form-group">
-            <label for="exp">Exp:</label>
-            <input type="text" id="exp" value="">
-            <div class="time-buttons">
-                <button onclick="addTime(0)">Get Current Time</button>
-                <button onclick="addTime(30)">+30s</button>
-                <button onclick="addTime(60)">+1m</button>
-                <button onclick="addTime(300)">+5m</button>
-                <button onclick="addTime(600)">+10m</button>
-                <button onclick="addTime(3600)">+1h</button>
-            </div>
-        </div>
-        <div class="form-group">
-            <label for="secret">Secret:</label>
-            <input type="text" id="secret" value="">
-        </div>
-        <button id="generateJWT" onclick="generateJWT()">Generate JWT</button>
-        <br>
-        <div class="form-group">
-            <div class="copy-container">
-                <label for="jwtToken">JWT Token:</label>
-            </div>
-            <textarea id="jwtToken" readonly></textarea>
-            <button class="copy-button" onclick="copyJWT()">Copy</button>
-        </div>
-        <!-- Add this after the JWT Token section -->
-        <div class="form-group">
-            <div class="copy-container">
-                <label for="curlCommand">cURL Command:</label>
-            </div>
-            <textarea id="curlCommand" readonly class="curl-command"></textarea>
-            <button class="copy-button" onclick="copyToClipboard('curlCommand')">Copy</button>
-        </div>
-    
+    <div class="tabs">
+        <button class="tab-button active" onclick="showTab('jwt-tab')">JWT Generator</button>
+        <button class="tab-button" onclick="showTab('webrtc-tab')">WebRTC Test</button>
     </div>
+    <div class="container">
+        <div id="jwt-tab" class="tab-content">
+            <h1>Turn JWT Generator</h1>
+            <div class="form-group">
+                <label for="version">Version:</label>
+                <input type="text" id="version" value="1.0" disabled>
+            </div>
+            <div class="form-group">
+                <label for="appID">App ID:</label>
+                <input type="text" id="appID" value="">
+            </div>
+            <div class="form-group">
+                <label for="exp">Exp:</label>
+                <input type="text" id="exp" value="">
+                <div class="time-buttons">
+                    <button onclick="addTime(0)">Get Current Time</button>
+                    <button onclick="addTime(30)">+30s</button>
+                    <button onclick="addTime(60)">+1m</button>
+                    <button onclick="addTime(300)">+5m</button>
+                    <button onclick="addTime(600)">+10m</button>
+                    <button onclick="addTime(3600)">+1h</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="secret">Secret:</label>
+                <input type="text" id="secret" value="">
+            </div>
+            <button id="generateJWT" onclick="generateJWT()">Generate JWT</button>
+            <br>
+            <div class="form-group">
+                <div class="copy-container">
+                    <label for="jwtToken">JWT Token:</label>
+                </div>
+                <textarea id="jwtToken" readonly></textarea>
+                <button class="copy-button" onclick="copyJWT()">Copy</button>
+            </div>
+            <!-- Add this after the JWT Token section -->
+            <div class="form-group">
+                <div class="copy-container">
+                    <label for="curlCommand">cURL Command:</label>
+                </div>
+                <textarea id="curlCommand" readonly class="curl-command"></textarea>
+                <button class="copy-button" onclick="copyToClipboard('curlCommand')">Copy</button>
+            </div>
+        </div>
+        <div id="webrtc-tab" class="tab-content" style="display: none;">
+            <h1>ICE Server Test</h1>
+            <div class="form-group">
+                <label for="iceUrl">STUN/TURN Server:</label>
+                <input type="text" id="iceUrl" placeholder="turn:global.turn.server:3478?transport=udp">
+            </div>
+            <div class="form-group">
+                <label for="iceUsername">Username:</label>
+                <input type="text" id="iceUsername">
+            </div>
+            <div class="form-group">
+                <label for="iceCredential">Credential:</label>
+                <input type="text" id="iceCredential">
+            </div>
+            <button onclick="testIceConfiguration()">Test Configuration</button>
+            <div id="testResult" class="test-result"></div>
+        </div>
     </div>
 
     <script>
@@ -252,6 +313,58 @@
                 alert('Copied to clipboard!');
             } else {
                 alert('Nothing to copy');
+            }
+        }
+       // Add tab functions
+       function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(tabId).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        // WebRTC test function
+        async function testIceConfiguration() {
+            const config = {
+                iceServers: [{
+                    urls: document.getElementById('iceUrl').value.split(','),
+                    username: document.getElementById('iceUsername').value,
+                    credential: document.getElementById('iceCredential').value
+                }]
+            };
+
+            const resultDiv = document.getElementById('testResult');
+            resultDiv.className = 'test-result';
+            resultDiv.textContent = 'Testing...';
+
+            try {
+                const pc = new RTCPeerConnection(config);
+                
+                pc.onicecandidate = (e) => {
+                    if (e.candidate) {
+                        resultDiv.className = 'test-result success';
+                        resultDiv.textContent = '✅ Success: Received ICE candidate';
+                        pc.close();
+                    }
+                };
+
+                pc.oniceconnectionstatechange = () => {
+                    if (pc.iceConnectionState === 'failed') {
+                        resultDiv.className = 'test-result error';
+                        resultDiv.textContent = '❌ Connection failed';
+                        pc.close();
+                    }
+                };
+
+                pc.createDataChannel('test');
+                await pc.createOffer();
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.textContent = `❌ Error: ${error.message}`;
             }
         }
     </script>
