@@ -107,11 +107,11 @@
         </div>
         <div class="form-group">
             <label for="appID">App ID:</label>
-            <input type="text" id="appID">
+            <input type="text" id="appID" value="">
         </div>
         <div class="form-group">
             <label for="exp">Exp:</label>
-            <input type="text" id="exp">
+            <input type="text" id="exp" value="">
             <div class="time-buttons">
                 <button onclick="addTime(0)">Get Current Time</button>
                 <button onclick="addTime(30)">+30s</button>
@@ -123,7 +123,7 @@
         </div>
         <div class="form-group">
             <label for="secret">Secret:</label>
-            <input type="text" id="secret">
+            <input type="text" id="secret" value="">
         </div>
         <button id="generateJWT" onclick="generateJWT()">Generate JWT</button>
         <br>
@@ -148,7 +148,7 @@
             addTime(0);  // Adds 0 seconds = current time
         }
 
-        function generateJWT() {
+        async function generateJWT() {
             const version = document.getElementById('version').value;
             const appID = document.getElementById('appID').value;
             const exp = document.getElementById('exp').value;
@@ -159,20 +159,57 @@
                 return;
             }
 
-            const header = {
-                alg: 'HS256',
-                typ: 'JWT'
-            };
+            try {
+                // 1. Create header and payload
+                const header = { alg: "HS256", typ: "JWT" };
+                const payload = {
+                    version: version,
+                    appID: appID,
+                    exp: Number(exp)
+                };
 
-            const payload = {
-                version: version,
-                appID: appID,
-                exp: parseInt(exp)
-            };
+                // 2. Base64Url encode header and payload
+                const encoder = new TextEncoder();
+                const headerEncoded = base64UrlEncode(JSON.stringify(header));
+                const payloadEncoded = base64UrlEncode(JSON.stringify(payload));
+                const unsignedToken = `${headerEncoded}.${payloadEncoded}`;
 
-            const token = KJUR.jws.JWS.sign(null, header, payload, secret);
-            document.getElementById('jwtToken').value = token;
+                // 3. Create HMAC-SHA256 signature
+                const key = await crypto.subtle.importKey(
+                    "raw",
+                    encoder.encode(secret),
+                    { name: "HMAC", hash: "SHA-256" },
+                    false,
+                    ["sign"]
+                );
+                
+                const signature = await crypto.subtle.sign(
+                    "HMAC",
+                    key,
+                    encoder.encode(unsignedToken)
+                );
+
+                // 4. Base64Url encode signature and construct final token
+                const signatureEncoded = base64UrlEncode(signature);
+                const token = `${unsignedToken}.${signatureEncoded}`;
+                
+                document.getElementById('jwtToken').value = token;
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
         }
+
+        function base64UrlEncode(input) {
+            if (typeof input === 'string') {
+                return btoa(input)
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=+$/, '');
+            }
+            const bytes = new Uint8Array(input);
+            return base64UrlEncode(String.fromCharCode(...bytes));
+        }
+
         function copyJWT() {
             const jwtTextarea = document.getElementById('jwtToken');
             if (jwtTextarea.value) {
