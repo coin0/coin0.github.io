@@ -72,7 +72,6 @@
             height: 100px;
             resize: none;
         }
-        /* Add style for time buttons container */
         .time-buttons {
             display: flex;
             gap: 0.5rem;
@@ -83,7 +82,6 @@
             font-size: 0.9rem;
             background-color: #007bff;
         }
-        /* Copy button styling */
         .copy-container {
             display: flex;
             align-items: center;
@@ -103,6 +101,9 @@
             font-family: monospace;
             white-space: pre-wrap;
         }
+        textarea {
+            background-color: #e9e9e9;
+        }        
     </style>
 </head>
 <body>
@@ -138,7 +139,7 @@
             <div class="copy-container">
                 <label for="jwtToken">JWT Token:</label>
             </div>
-            <textarea id="jwtToken" readonly disabled></textarea>
+            <textarea id="jwtToken" readonly></textarea>
             <button class="copy-button" onclick="copyJWT()">Copy</button>
         </div>
         <!-- Add this after the JWT Token section -->
@@ -146,7 +147,7 @@
             <div class="copy-container">
                 <label for="curlCommand">cURL Command:</label>
             </div>
-            <textarea id="curlCommand" readonly disabled class="curl-command"></textarea>
+            <textarea id="curlCommand" readonly class="curl-command"></textarea>
             <button class="copy-button" onclick="copyToClipboard('curlCommand')">Copy</button>
         </div>
     
