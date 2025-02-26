@@ -221,6 +221,20 @@
     </div>
 
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load cached values from local storage
+            const cachedAppID = localStorage.getItem('appID');
+            const cachedSecret = localStorage.getItem('secret');
+
+            if (cachedAppID) {
+                document.getElementById('appID').value = cachedAppID;
+            }
+
+            if (cachedSecret) {
+                document.getElementById('secret').value = cachedSecret;
+            }
+        });
+
         function addTime(seconds) {
             const expInput = document.getElementById('exp');
             const currentTime = Math.floor(Date.now() / 1000);
@@ -237,6 +251,10 @@
             const appID = document.getElementById('appID').value;
             const exp = document.getElementById('exp').value;
             const secret = document.getElementById('secret').value;
+
+            // Cache App ID and Secret in local storage
+            localStorage.setItem('appID', appID);
+            localStorage.setItem('secret', secret);
 
             if (!appID || !exp || !secret) {
                 alert('Please fill in all fields');
