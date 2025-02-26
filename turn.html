@@ -344,10 +344,13 @@
                 if (!config.iceServers || !Array.isArray(config.iceServers)) {
                     throw new Error('Invalid iceServers configuration in JSON');
                 }
-                config.iceTransportPolicy = "relay";
+                config.iceTransportPolicy = "all";
     
                 const pc = new RTCPeerConnection(config);
                 const candidateTableBody = document.getElementById('candidate-table-body');
+                while (candidateTableBody.firstChild) {
+                    candidateTableBody.removeChild(candidateTableBody.firstChild);
+                }
     
                 pc.onicecandidate = (event) => {
                     if (event.candidate) {
