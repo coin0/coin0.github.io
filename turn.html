@@ -147,6 +147,11 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        /* Add styles for video tags */
+        video {
+            width: 100%;
+            margin-top: 1rem;
+        }
     </style>
 </head>
 <body onload="showTab('jwt-tab')">
@@ -206,6 +211,9 @@
                 <textarea id="webrtc-config" rows="10" placeholder='{"iceServers": [{"urls": "stun:example.com"}]}'></textarea>
             </div>
             <button onclick="testWebRTCConfig()">Test ICE Servers</button>
+            <button onclick="startCall()">Start Call</button>
+            <!-- Add hangup button -->
+            <button onclick="hangupCall()">Hangup Call</button>
             <div id="webrtc-test-result" class="test-result"></div>
             <table id="candidate-table">
                 <thead>
@@ -217,6 +225,8 @@
                 </thead>
                 <tbody id="candidate-table-body"></tbody>
             </table>
+            <video id="localVideo" autoplay muted></video>
+            <video id="remoteVideo" autoplay></video>
         </div>
     </div>
 
@@ -405,6 +415,86 @@
                 resultDiv.className = 'test-result error';
                 resultDiv.textContent = `Error: ${error.message}`;
             }
+        }
+
+        let localStream;
+        let pc1;
+        let pc2;
+
+        async function startCall() {
+            try {
+                const configStr = document.getElementById('webrtc-config').value;
+                const config = JSON.parse(configStr);
+
+                if (!config.iceServers || !Array.isArray(config.iceServers)) {
+                    throw new Error('Invalid iceServers configuration in JSON');
+                }
+                config.iceTransportPolicy = "relay";
+
+                // Get local stream
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const localVideo = document.getElementById('localVideo');
+                localVideo.srcObject = localStream;
+
+                // Create peer connections
+                pc1 = new RTCPeerConnection(config);
+                pc2 = new RTCPeerConnection(config);
+
+                // Add local stream to pc1
+                localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
+
+                // Set up pc1
+                pc1.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        pc2.addIceCandidate(event.candidate);
+                    }
+                };
+
+                // Set up pc2
+                pc2.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        pc1.addIceCandidate(event.candidate);
+                    }
+                };
+
+                pc2.ontrack = (event) => {
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    remoteVideo.srcObject = event.streams[0];
+                };
+
+                // Create offer
+                const offer = await pc1.createOffer();
+                await pc1.setLocalDescription(offer);
+                await pc2.setRemoteDescription(offer);
+
+                // Create answer
+                const answer = await pc2.createAnswer();
+                await pc2.setLocalDescription(answer);
+                await pc1.setRemoteDescription(answer);
+
+            } catch (error) {
+                alert(`Error starting call: ${error.message}`);
+            }
+        }
+
+        // Add hangupCall function
+        function hangupCall() {
+            if (pc1) {
+                pc1.close();
+                pc1 = null;
+            }
+            if (pc2) {
+                pc2.close();
+                pc2 = null;
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            const localVideo = document.getElementById('localVideo');
+            localVideo.srcObject = null;
+            const remoteVideo = document.getElementById('remoteVideo');
+            remoteVideo.srcObject = null;
         }
     </script>
 </body>
