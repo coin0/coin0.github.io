@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC P2P 通信</title>
+    <!-- 添加 PeerJS CDN -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: grid;
+            grid-gap: 20px;
+        }
+        .call-info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .chat-container {
+            height: 300px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        .controls {
+            display: grid;
+            grid-gap: 10px;
+        }
+        button {
+            padding: 10px;
+            cursor: pointer;
+        }
+        #myId {
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="call-info">
+            <h2>你的ID: <span id="myId"></span></h2>
+            <input type="text" id="peerId" placeholder="输入对方ID">
+            <button id="callButton">发起呼叫</button>
+            <button id="hangupButton" disabled>挂断</button>
+        </div>
+
+        <div class="chat-section">
+            <div class="chat-container" id="chatBox"></div>
+            <div class="controls">
+                <input type="text" id="messageInput" placeholder="输入消息">
+                <button id="sendMessage">发送消息</button>
+                <input type="file" id="fileInput">
+                <button id="sendFile">发送文件</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let peer;
+        let currentConn;
+        
+        // 生成随机ID
+        function generateId() {
+            return Math.floor(Math.random() * 900000 + 100000).toString();
+        }
+        
+        // 初始化 PeerJS 连接
+        async function initConnection() {
+            peer = new Peer(generateId(), {
+                host: '0.peerjs.com',
+                port: 443,
+                secure: true
+            });
+
+            peer.on('open', (id) => {
+                document.getElementById('myId').textContent = id;
+            });
+
+            peer.on('connection', (conn) => {
+                handleConnection(conn);
+            });
+
+            peer.on('call', (call) => {
+                if (confirm('收到语音通话请求，是否接受？')) {
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(stream => {
+                            call.answer(stream);
+                            setupCallHandlers(call);
+                        });
+                }
+            });
+        }
+
+        function handleConnection(conn) {
+            currentConn = conn;
+            setupDataHandlers(conn);
+            document.getElementById('hangupButton').disabled = false;
+        }
+
+        function setupDataHandlers(conn) {
+            conn.on('data', (data) => {
+                if (typeof data === 'string') {
+                    displayMessage('对方', data);
+                } else {
+                    receiveFile(data);
+                }
+            });
+        }
+
+        function setupCallHandlers(call) {
+            call.on('stream', (stream) => {
+                // 处理音频流
+                const audio = document.createElement('audio');
+                audio.srcObject = stream;
+                audio.play();
+            });
+        }
+
+        // 发起呼叫
+        async function makeCall(peerId) {
+            const conn = peer.connect(peerId);
+            handleConnection(conn);
+
+            // 发起语音通话
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    const call = peer.call(peerId, stream);
+                    setupCallHandlers(call);
+                });
+        }
+
+        // 显示消息
+        function displayMessage(sender, message) {
+            const chatBox = document.getElementById('chatBox');
+            const messageElement = document.createElement('p');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatBox.appendChild(messageElement);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // 修改发送消息函数
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value;
+            if (message && currentConn) {
+                currentConn.send(message);
+                displayMessage('我', message);
+                messageInput.value = '';
+            }
+        }
+
+        // 接收文件
+        function receiveFile(data) {
+            const blob = new Blob([data]);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `received_file_${new Date().getTime()}`;
+            a.click();
+            URL.revokeObjectURL(url);
+            displayMessage('系统', '收到新文件');
+        }
+
+        // 修改发送文件函数
+        async function sendFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (file && currentConn) {
+                const arrayBuffer = await file.arrayBuffer();
+                currentConn.send(arrayBuffer);
+                displayMessage('系统', `已发送文件: ${file.name}`);
+            }
+        }
+
+        // 修改页面加载初始化
+        window.onload = async () => {
+            await initConnection();
+
+            document.getElementById('callButton').onclick = () => {
+                const peerId = document.getElementById('peerId').value;
+                if (peerId) {
+                    makeCall(peerId);
+                }
+            };
+
+            document.getElementById('hangupButton').onclick = () => {
+                if (currentConn) {
+                    currentConn.close();
+                    currentConn = null;
+                    document.getElementById('hangupButton').disabled = true;
+                }
+            };
+
+            document.getElementById('sendMessage').onclick = sendMessage;
+            document.getElementById('sendFile').onclick = sendFile;
+        };
+    </script>
+</body>
+</html>
