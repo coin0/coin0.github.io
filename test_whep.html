@@ -8,7 +8,6 @@
  <body style="height: 100%; margin:0 auto;">
    <video id="video-box" style="background-color:#ccc" autoplay></video>
    <button onclick="javascript:play();">play</button>
-   <p id="localsdp"></p>
  </body>
  <script>
    let pc = new RTCPeerConnection();
@@ -18,6 +17,75 @@
 
    function onDCStateChange() {
        console.log('dc state changed to ' + dc.readyState);
+   }
+
+   function convertToKeysym(key) {
+    // Handle special keys first
+    switch(key) {
+        case 'Backspace': return 0xff08;
+        case 'Tab': return 0xff09;
+        case 'Enter': return 0xff0d;
+        case 'Escape': return 0xff1b;
+        case 'Delete': return 0xffff;
+        case 'Home': return 0xff50;
+        case 'End': return 0xff57;
+        case 'PageUp': return 0xff55;
+        case 'PageDown': return 0xff56;
+        case 'ArrowLeft': return 0xff51;
+        case 'ArrowUp': return 0xff52;
+        case 'ArrowRight': return 0xff53;
+        case 'ArrowDown': return 0xff54;
+        case 'Shift': return 0xffe1;
+        case 'Control': return 0xffe3;
+        case 'Alt': return 0xffe9;
+        case 'Meta': return 0xffe7;
+        case 'CapsLock': return 0xffe5;
+        case 'NumLock': return 0xff7f;
+        case 'ScrollLock': return 0xff14;
+        case 'F1': return 0xffbe;
+        case 'F2': return 0xffbf;
+        case 'F3': return 0xffc0;
+        case 'F4': return 0xffc1;
+        case 'F5': return 0xffc2;
+        case 'F6': return 0xffc3;
+        case 'F7': return 0xffc4;
+        case 'F8': return 0xffc5;
+        case 'F9': return 0xffc6;
+        case 'F10': return 0xffc7;
+        case 'F11': return 0xffc8;
+        case 'F12': return 0xffc9;
+        case ' ': return 0x0020;
+    }
+
+    // Handle single character keys
+    if (key.length === 1) {
+        const code = key.charCodeAt(0);
+        // Handle lowercase letters
+        if (code >= 97 && code <= 122) return 0x0061 + (code - 97);
+        // Handle uppercase letters
+        if (code >= 65 && code <= 90) return 0x0041 + (code - 65);
+        // Handle numbers
+        if (code >= 48 && code <= 57) return 0x0030 + (code - 48);
+        // Handle other printable ASCII characters
+        if (code >= 32 && code <= 126) return code;
+    }
+
+    // Handle numpad keys
+    if (key.startsWith('Numpad')) {
+        const num = key.slice(6);
+        if (num >= 0 && num <= 9) return 0xffb0 + parseInt(num);
+        switch(key) {
+            case 'NumpadMultiply': return 0xffaa;
+            case 'NumpadAdd': return 0xffab;
+            case 'NumpadSubtract': return 0xffad;
+            case 'NumpadDecimal': return 0xffae;
+            case 'NumpadDivide': return 0xffaf;
+            case 'NumpadEnter': return 0xff8d;
+        }
+    }
+
+    // Default to 0 if key is not recognized
+    return 0;
    }
 
    function play() {
@@ -32,7 +100,6 @@
        pc.createOffer({offerToReceiveAudio: true, offerToReceiveVideo: true })
            .then((offer) => {
                console.log(offer);
-               document.getElementById("localsdp").innerHTML = offer.sdp.replaceAll('\r\n', '<br>');
                return pc.setLocalDescription(offer);
            })
            .then(() => {
@@ -63,12 +130,12 @@
 
            document.addEventListener('keydown', (event) => {
                // Send the key event via the DataChannel
-               dc.send(JSON.stringify({ type: 'keydown', key: event.key }));
+               dc.send(JSON.stringify({ type: 'keydown', key: convertToKeysym(event.key) }));
            });
 
            document.addEventListener('keyup', (event) => {
                // Send the key event via the DataChannel
-               dc.send(JSON.stringify({ type: 'keyup', key: event.key }));
+               dc.send(JSON.stringify({ type: 'keyup', key: convertToKeysym(event.key) }));
            });
 
            document.addEventListener('mousedown', (event) => {
@@ -95,6 +162,16 @@
                    let x = Math.floor((event.clientX - rect.left) / rect.width * resolutionWidth);
                    let y = Math.floor((event.clientY - rect.top) / rect.height * resolutionHeight);
                    dc.send(JSON.stringify({ type: 'mousemove', x: x, y: y }));
+               }
+           });
+
+           document.addEventListener('wheel', (event) => {
+               if (event.target === videoBox) {
+                   event.preventDefault(); // Prevent default scrolling behavior
+                   let rect = videoBox.getBoundingClientRect();
+                   let x = Math.floor((event.clientX - rect.left) / rect.width * resolutionWidth);
+                   let y = Math.floor((event.clientY - rect.top) / rect.height * resolutionHeight);
+                   dc.send(JSON.stringify({ type: 'mousewheel', x: x, y: y, deltaY: event.deltaY }));
                }
            });
    }
