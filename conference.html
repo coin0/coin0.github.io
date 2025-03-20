@@ -42,13 +42,16 @@
         }
 
         .sidebar {
-            width: 300px;
+            width: 250px;
+            /* 宽度从300px缩小到250px */
             display: flex;
             flex-direction: column;
             justify-content: center;
-            /* 垂直居中 */
-            gap: 15px;
+            gap: 10px;
+            /* 缩小间距 */
             height: 100%;
+            overflow-y: auto;
+            /* 添加滚动条 */
         }
 
         .video-item {
@@ -245,15 +248,14 @@
         }
 
         // 更新侧边栏
+        // 修改侧边栏用户数量限制
         function updateSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.innerHTML = ''; // 清空现有内容
 
-            // 获取所有远程用户（除了UID为1的）
+            // 修复：添加sidebarUsers定义
             const sidebarUsers = Object.values(remoteUsers).filter(user => user.uid !== mainUid);
-
-            // 最多显示3个用户
-            const usersToShow = sidebarUsers.slice(0, 3);
+            const usersToShow = sidebarUsers.slice(0, 4); // 显示数量从3改为4
 
             for (const user of usersToShow) {
                 const container = document.createElement("div");
