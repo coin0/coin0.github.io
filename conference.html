@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频页面</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.agora.io/sdk/release/AgoraRTC_N.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 0;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 100%;
+            padding: 0;
+            height: 100vh;
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+            padding: 30px;
+            /* 增加内边距 */
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        .main-video {
+            flex: 1;
+            background-color: #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            height: 100%;
+            min-height: unset;
+            aspect-ratio: unset;
+        }
+
+        .sidebar {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            /* 垂直居中 */
+            gap: 15px;
+            height: 100%;
+        }
+
+        .video-item {
+            background-color: #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            position: relative;
+        }
+
+        .no-video {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .user-id {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: 500;
+            color: #fff;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .main-video .user-id {
+            width: 200px;
+            height: 200px;
+        }
+
+        .user-id.host {
+            background: linear-gradient(135deg, #f43f5e, #ec4899);
+        }
+
+        .video-item,
+        .main-video {
+            border: 2px solid transparent;
+            transition: border-color 0.2s ease;
+        }
+
+        .video-item.speaking,
+        .main-video.speaking {
+            border-color: #22c55e !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="main-container">
+            <div class="main-video" id="main-video">
+                <div class="no-video"><span class="user-id host">1</span></div>
+            </div>
+            <div class="sidebar" id="sidebar">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 从URL获取参数
+        function getUrlParams() {
+            const params = {};
+            const queryString = window.location.search.substring(1);
+            const pairs = queryString.split('&');
+
+            for (const pair of pairs) {
+                const [key, value] = pair.split('=');
+                if (key && value) {
+                    params[decodeURIComponent(key)] = decodeURIComponent(value);
+                }
+            }
+
+            return params;
+        }
+
+        // 获取URL参数
+        const urlParams = getUrlParams();
+        const appId = urlParams.appid || '';
+        const channelName = urlParams.cname || '';
+        const token = urlParams.token || null;
+        const uid = urlParams.uid ? parseInt(urlParams.uid) : 0;
+        const mainUid = urlParams.host ? Math.max(1, parseInt(urlParams.host) || 1) : 1;
+
+        // 立即更新主视频占位符
+        document.getElementById('main-video').innerHTML =
+            `<div class="no-video"><span class="user-id host">${mainUid}</span></div>`;
+
+        // Agora 客户端对象
+        let client = null;
+        let remoteUsers = {};
+        let userCount = 0;
+
+        // 初始化 Agora 客户端
+        async function initializeAgora() {
+            if (!appId || !channelName) {
+                alert('缺少必要参数: appId 或 channelName');
+                return;
+            }
+
+            client = AgoraRTC.createClient({ mode: "live", codec: "vp8" });
+            client.setClientRole("audience"); // 设置为观众角色，只接收不推流
+
+            // 注册事件处理程序
+            client.on("user-published", handleUserPublished);
+            client.on("user-unpublished", handleUserUnpublished);
+            client.on("user-joined", handleUserJoined);
+            client.on("user-left", handleUserLeft);
+            client.on("connection-state-change", handleConnectionStateChange);
+
+            try {
+                // 加入频道
+                await client.join(appId, channelName, token, uid);
+                console.log("成功加入频道");
+            } catch (error) {
+                console.error("加入频道失败:", error);
+            }
+        }
+
+        // 处理连接状态变化
+        function handleConnectionStateChange(state, reason) {
+            console.log("连接状态变化:", state, reason);
+        }
+
+        // 处理用户加入
+        function handleUserJoined(user) {
+            console.log("用户加入:", user.uid);
+            userCount++;
+            remoteUsers[user.uid] = user;
+
+            if (user.uid === mainUid) {
+                const mainVideo = document.getElementById('main-video');
+                mainVideo.innerHTML = `<div class="no-video"><span class="user-id host">${mainUid}</span></div>`;
+            } else {
+                updateSidebar();
+            }
+        }
+
+        // 修改处理远程用户发布的函数
+        async function handleUserPublished(user, mediaType) {
+            await client.subscribe(user, mediaType);
+            console.log("订阅远程用户成功:", user.uid, mediaType);
+
+            if (mediaType === "video") {
+                if (user.uid === mainUid) {
+                    updateMainVideo(user);
+                } else {
+                    updateSidebar();
+                }
+            }
+
+            if (mediaType === "audio") {
+                user.audioTrack.play();
+                startVolumeDetection(user);
+            }
+
+            remoteUsers[user.uid] = user;
+        }
+
+        // 新增音量检测函数
+        function startVolumeDetection(user) {
+            const containerId = user.uid === mainUid ? 'main-video' : `sidebar-player-${user.uid}`;
+            user.volumeDetectionInterval = setInterval(() => {
+                if (user.audioTrack) {
+                    const volume = user.audioTrack.getVolumeLevel();
+                    const element = document.getElementById(containerId);
+                    if (element) {
+                        element.classList.toggle('speaking', volume >= 0.6);
+                    }
+                }
+            }, 100);
+        }
+
+        // 更新主视频区域
+        function updateMainVideo(user) {
+            const mainVideo = document.getElementById('main-video');
+            mainVideo.innerHTML = ''; // 清空现有内容
+
+            const container = document.createElement("div");
+            container.id = `player-${user.uid}`;
+            container.className = "video-item";
+            container.style.width = "100%";
+            container.style.height = "100%";
+            mainVideo.append(container);
+
+            user.videoTrack.play(`player-${user.uid}`);
+        }
+
+        // 更新侧边栏
+        function updateSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.innerHTML = ''; // 清空现有内容
+
+            // 获取所有远程用户（除了UID为1的）
+            const sidebarUsers = Object.values(remoteUsers).filter(user => user.uid !== mainUid);
+
+            // 最多显示3个用户
+            const usersToShow = sidebarUsers.slice(0, 3);
+
+            for (const user of usersToShow) {
+                const container = document.createElement("div");
+                container.id = `sidebar-player-${user.uid}`;
+                container.className = "video-item";
+
+                if (user.videoTrack) {
+                    // 创建专用的播放器容器
+                    const playerContainer = document.createElement("div");
+                    playerContainer.style.width = "100%";
+                    playerContainer.style.height = "100%";
+                    container.appendChild(playerContainer);
+                    user.videoTrack.play(playerContainer);  // 传入DOM元素
+                } else {
+                    const noVideo = document.createElement("div");
+                    noVideo.className = "no-video";
+                    noVideo.innerHTML = `<span class="user-id">${user.uid}</span>`;
+                    container.append(noVideo);
+                }
+
+                sidebar.append(container);
+            }
+        }
+
+        // 处理用户离开和取消发布时的显示也需要修改
+        // 修改handleUserLeft函数
+        function handleUserLeft(user) {
+            if (user.volumeDetectionInterval) {
+                clearInterval(user.volumeDetectionInterval);
+                // 新增边框状态清除
+                const containerId = user.uid === 1 ? 'main-video' : `sidebar-player-${user.uid}`;
+                const element = document.getElementById(containerId);
+                if (element) {
+                    element.classList.remove('speaking');
+                }
+            }
+            console.log("用户离开:", user.uid);
+            userCount--;
+            delete remoteUsers[user.uid];
+            if (user.uid === mainUid) {
+                const mainVideo = document.getElementById('main-video');
+                mainVideo.innerHTML = `<div class="no-video"><span class="user-id host">${mainUid}</span></div>`;
+            }
+            updateSidebar();
+        }
+
+        // 处理远程用户取消发布
+        function handleUserUnpublished(user, mediaType) {
+            console.log("远程用户取消发布:", user.uid, mediaType);
+
+            if (mediaType === "video") {
+                if (user.uid === 1) {
+                    // 如果是主播取消视频
+                    const mainVideo = document.getElementById('main-video');
+                    mainVideo.innerHTML = '<div class="no-video"><span class="user-id host">1</span></div>';
+                } else {
+                    // 更新侧边栏
+                    updateSidebar();
+                }
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', initializeAgora);
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+</body>
+
+</html>
