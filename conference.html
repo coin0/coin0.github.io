@@ -287,7 +287,7 @@
             if (user.volumeDetectionInterval) {
                 clearInterval(user.volumeDetectionInterval);
                 // 新增边框状态清除
-                const containerId = user.uid === 1 ? 'main-video' : `sidebar-player-${user.uid}`;
+                const containerId = user.uid === mainUid ? 'main-video' : `sidebar-player-${user.uid}`;
                 const element = document.getElementById(containerId);
                 if (element) {
                     element.classList.remove('speaking');
@@ -308,10 +308,10 @@
             console.log("远程用户取消发布:", user.uid, mediaType);
 
             if (mediaType === "video") {
-                if (user.uid === 1) {
+                if (user.uid === mainUid) {
                     // 如果是主播取消视频
                     const mainVideo = document.getElementById('main-video');
-                    mainVideo.innerHTML = '<div class="no-video"><span class="user-id host">1</span></div>';
+                    mainVideo.innerHTML = `<div class="no-video"><span class="user-id host">${mainUid}</span></div>`;
                 } else {
                     // 更新侧边栏
                     updateSidebar();
