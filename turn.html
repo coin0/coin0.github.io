@@ -321,7 +321,7 @@
 
                 // In the generateJWT function, add this after setting the token value:
                 document.getElementById('curlCommand').value = 
-                    `curl -X GET "https://http-global-turn.ap.staging-1-ali.myagoralab.com/turn" -H "Authorization: Bearer ${token}"`;
+                    `curl -k -X GET "https://http-global-turn.ap.staging-1-ali.myagoralab.com/turn" -H "Authorization: Bearer ${token}"`;
             } catch (error) {
                 alert(`Error: ${error.message}`);
             }
