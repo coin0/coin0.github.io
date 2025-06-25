@@ -41,6 +41,10 @@ var videoProfiles = [
   detail: "160x120, 15fps, 130Kbps",
   value: {width:160, height:120, frameRate:15, bitrateMin: 130, bitrateMax:130}
 }, {
+  label: "848x480",
+  detail: "848x480, 15fps, 610Kbps",
+  value: {width:848, height:480, frameRate:15, bitrateMin: 610, bitrateMax:610}
+}, {
   label: "360p_7",
   detail: "480×360, 15fps, 320Kbps",
   value: "360p_7"
