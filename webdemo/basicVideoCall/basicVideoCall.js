@@ -237,10 +237,12 @@ async function join() {
   client.on("user-unpublished", handleUserUnpublished);
   // Join the channel.
   options.uid = await client.join(options.appid, options.channel, options.token || null, options.uid || null);
-  if (!localTracks.audioTrack) {
+  if (!localTracks.audioTrack && !$("#mute").is(':checked')) {
     localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
       encoderConfig: "music_standard"
     });
+  } else {
+    delete localTracks.audioTrack;
   }
   if (!localTracks.videoTrack) {
     localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack({
