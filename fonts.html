@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Font Family Tester</title>
+    <style>
+        .test-area {
+            /* 通过CSS变量动态设置字体 */
+            font-family: var(--custom-font, Arial), sans-serif;
+            font-size: 24px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-area">
+        The quick brown fox jumps over a lazy dog.<br>
+        0123456789!@#$%^&*()<br>
+        ABCDEFGHIJKLMNOPQRSTUVWXYZ<br>
+        abcdefghijklmnopqrstuvwxyz<br>
+        [{}]~|_+=±§¿°¢£¥€©®™
+    </div>
+
+    <script>
+        // 获取URL参数中的字体设置
+        const urlParams = new URLSearchParams(window.location.search);
+        const customFont = urlParams.get('font');
+        
+        // 如果有字体参数，设置CSS变量
+        if (customFont) {
+            document.documentElement.style.setProperty(
+                '--custom-font', 
+                `"${customFont.replace(/"/g, '')}"` // 防止注入攻击
+            );
+        }
+    </script>
+</body>
+</html>
