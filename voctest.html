@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>词汇练习 - 文件上传随机测试</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #3b82f6;
+      --green: #43a047;
+      --red: #e53935;
+      --border: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #0f172a 0%, #0b1220 60%, #10213a 100%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      line-height: 1.6;
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: #0b1220;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    label { color: var(--muted); font-size: 14px; }
+    input[type="file"] {
+      padding: 10px;
+      background: #0f1628;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+    }
+    .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+    .dropzone {
+      margin-top: 10px;
+      padding: 16px;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      text-align: center;
+      color: var(--muted);
+      background: #0f1628;
+    }
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.12);
+      color: var(--text);
+    }
+
+    /* URL 列表样式 */
+    .url-card h3 { margin: 0 0 8px; font-size: 16px; }
+    .url-editor { margin-top: 10px; }
+    .url-editor textarea {
+      width: 100%;
+      min-height: 96px;
+      background: #0f1628;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px;
+      font-family: ui-monospace, Menlo, Monaco, Consolas, "Courier New", monospace;
+    }
+    .url-actions { margin-top: 8px; display: flex; gap: 8px; }
+    .url-list { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #0f1628;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .chip:hover { filter: brightness(1.1); }
+
+    .info { display: flex; gap: 16px; align-items: center; color: var(--muted); font-size: 14px; }
+    .info .badge { background: #0f1628; border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; color: var(--text); }
+
+    .term {
+      margin: 28px 0;
+      font-size: 56px;
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: 0.5px;
+      min-height: 72px;
+    }
+
+    .actions { display: flex; justify-content: center; gap: 14px; }
+    .btn {
+      padding: 12px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0f1628;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 18px;
+      transition: transform .05s ease, filter .15s ease;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-wrong { background: var(--red); color: white; border-color: #c62828; }
+    .btn-right { background: var(--green); color: white; border-color: #2e7d32; }
+    .btn-accent { background: var(--accent); color: white; border-color: #2563eb; }
+
+    .hidden { display: none; }
+    .feedback {
+      text-align: center;
+      min-height: 28px;
+      color: #ffd54f;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .results { margin-top: 24px; }
+    .summary { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 18px; }
+    .summary .item { background: #0f1628; border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid var(--border); padding: 10px 8px; text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    tbody tr:hover { background: #0f1628; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    tr.wrong { background: rgba(229,57,53,0.12); }
+  </style>
+  <script>
+    let items = [];
+    let remaining = [];
+    let currentIndex = null;
+    let startTime = null;
+    let total = 0;
+    let mistakes = 0;
+    let perStats = new Map();
+
+    const el = (id) => document.getElementById(id);
+    const defaultUrls = [
+        'https://coin0.github.io/eng/grade1a_starter.txt',
+        'https://coin0.github.io/eng/grade1a_unit1.txt',
+        'https://coin0.github.io/eng/grade1a_unit2.txt',
+        'https://coin0.github.io/eng/grade1a_unit3.txt',
+        'https://coin0.github.io/eng/grade1a_unit4.txt',
+        'https://coin0.github.io/eng/grade1a_unit9.txt',
+    ];
+
+    function resetAll() {
+      items = [];
+      remaining = [];
+      currentIndex = null;
+      startTime = null;
+      total = 0;
+      mistakes = 0;
+      perStats = new Map();
+      el('quiz').classList.add('hidden');
+      el('results').classList.add('hidden');
+      el('term').textContent = '';
+      el('progress').textContent = '进度：0/0';
+      el('mistakes').textContent = '错误：0';
+      el('fileName').textContent = '';
+      el('btnWrong').disabled = true;
+      el('btnRight').disabled = true;
+      const endBtn = el('btnEnd');
+      if (endBtn) endBtn.disabled = true;
+    }
+
+    function parseLines(text) {
+      return text
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+    }
+
+    function startQuiz(data, fileLabel) {
+      items = data.slice();
+      total = items.length;
+      remaining = Array.from({ length: total }, (_, i) => i);
+      mistakes = 0;
+      perStats = new Map();
+      el('fileName').textContent = fileLabel ? `文件：${fileLabel}` : '';
+      el('progress').textContent = `进度：0/${total}`;
+      el('mistakes').textContent = `错误：0`;
+      el('quiz').classList.remove('hidden');
+      el('results').classList.add('hidden');
+      el('btnEnd').disabled = false;
+      showNext();
+    }
+
+    function pickRandomRemainingIndex() {
+      const idx = Math.floor(Math.random() * remaining.length);
+      return remaining[idx];
+    }
+
+    function showNext() {
+      if (remaining.length === 0) {
+        finishQuiz();
+        return;
+      }
+      const next = pickRandomRemainingIndex();
+      currentIndex = next;
+      el('term').textContent = items[currentIndex];
+      el('btnWrong').disabled = false;
+      el('btnRight').disabled = false;
+      startTime = performance.now();
+    }
+
+    function answer(correct) {
+      if (currentIndex === null || startTime === null) return;
+      const durationMs = performance.now() - startTime;
+      const text = items[currentIndex];
+      const stat = perStats.get(text) || { count: 0, mistakes: 0, totalTimeMs: 0 };
+      stat.count += 1;
+      if (!correct) { stat.mistakes += 1; mistakes += 1; }
+      stat.totalTimeMs += durationMs;
+      perStats.set(text, stat);
+
+      const pos = remaining.indexOf(currentIndex);
+      if (pos !== -1) remaining.splice(pos, 1);
+
+      el('progress').textContent = `进度：${total - remaining.length}/${total}`;
+      el('mistakes').textContent = `错误：${mistakes}`;
+
+      currentIndex = null;
+      startTime = null;
+      showFeedback(correct, durationMs);
+
+      if (remaining.length > 0) {
+        showNext();
+      } else {
+        finishQuiz();
+      }
+    }
+
+    function showFeedback(correct, ms) {
+      const fb = el('feedback');
+      if (!fb) return;
+      fb.textContent = correct ? `太棒了！👍 (${(ms/1000).toFixed(2)}s)` : `没关系，再试试！💪 (${(ms/1000).toFixed(2)}s)`;
+      fb.style.opacity = '1';
+      setTimeout(() => { fb.style.opacity = '0'; }, 800);
+    }
+
+    function finishQuiz() {
+      el('btnWrong').disabled = true;
+      el('btnRight').disabled = true;
+      el('btnEnd').disabled = true;
+      renderResults();
+      el('results').classList.remove('hidden');
+    }
+
+    function endQuizNow() {
+      // 提前结束：不再继续剩余题目，直接出结果
+      el('btnWrong').disabled = true;
+      el('btnRight').disabled = true;
+      el('btnEnd').disabled = true;
+      remaining = [];
+      renderResults();
+      el('results').classList.remove('hidden');
+    }
+
+    function renderResults() {
+      const answeredCount = total - remaining.length;
+      const totalAnswers = answeredCount;
+      const errorRate = totalAnswers === 0 ? 0 : (mistakes / totalAnswers) * 100;
+      const score = Math.max(0, Math.round(100 - errorRate));
+      el('summaryTotal').textContent = `总题数：${totalAnswers}`;
+      el('summaryMistakes').textContent = `错误数：${mistakes}`;
+      el('summaryErrorRate').textContent = `错误率：${errorRate.toFixed(2)}%`;
+      const scoreEl = el('summaryScore');
+      if (scoreEl) scoreEl.textContent = `得分：${score}/100`;
+
+      const tbody = el('resultBody');
+      tbody.innerHTML = '';
+      const rows = [];
+      for (const [text, stat] of perStats.entries()) {
+        const avgSec = stat.count ? (stat.totalTimeMs / stat.count) / 1000 : 0;
+        rows.push({ text, avgSec, count: stat.count, mistakes: stat.mistakes });
+      }
+      rows.sort((a, b) => {
+        const wrongA = a.mistakes > 0 ? 1 : 0;
+        const wrongB = b.mistakes > 0 ? 1 : 0;
+        if (wrongA !== wrongB) return wrongB - wrongA; // 错题置顶
+        if (a.mistakes !== b.mistakes) return b.mistakes - a.mistakes; // 错误次数多的更靠前
+        return a.text.localeCompare(b.text);
+      });
+      for (const r of rows) {
+        const tr = document.createElement('tr');
+        if (r.mistakes > 0) tr.classList.add('wrong');
+        const tdText = document.createElement('td');
+        tdText.textContent = r.text;
+        tdText.className = 'mono';
+        const tdAvg = document.createElement('td');
+        tdAvg.textContent = r.avgSec.toFixed(3);
+        const tdCnt = document.createElement('td');
+        tdCnt.textContent = r.count;
+        const tdMis = document.createElement('td');
+        tdMis.textContent = r.mistakes;
+        tr.appendChild(tdText);
+        tr.appendChild(tdAvg);
+        tr.appendChild(tdCnt);
+        tr.appendChild(tdMis);
+        tbody.appendChild(tr);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      resetAll();
+      const fileInput = el('fileInput');
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        await handleFile(file);
+      });
+
+      const dropzone = el('dropzone');
+      const uploadCard = el('upload');
+      const prevent = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+      ['dragenter','dragover'].forEach(evName => {
+        uploadCard.addEventListener(evName, (ev) => { prevent(ev); dropzone.classList.add('dragover'); });
+        dropzone.addEventListener(evName, (ev) => { prevent(ev); dropzone.classList.add('dragover'); });
+      });
+      ['dragleave','drop'].forEach(evName => {
+        uploadCard.addEventListener(evName, (ev) => { prevent(ev); dropzone.classList.remove('dragover'); });
+        dropzone.addEventListener(evName, (ev) => { prevent(ev); dropzone.classList.remove('dragover'); });
+      });
+      dropzone.addEventListener('drop', async (ev) => {
+        const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+        if (!file) return;
+        await handleFile(file);
+      });
+
+      async function handleFile(file) {
+        resetAll();
+        try {
+          const text = await file.text();
+          const lines = parseLines(text);
+          if (lines.length === 0) {
+            alert('文件内容为空或只有空行，请重试。');
+            return;
+          }
+          startQuiz(lines, file.name);
+        } catch (err) {
+          alert('读取文件失败，请重试。');
+          console.error(err);
+        }
+      }
+
+      // 初始化与渲染 URL 列表
+      const urlInput = el('urlListInput');
+      const urlSaveBtn = el('urlListSave');
+      const urlList = el('urlList');
+      if (urlInput) urlInput.value = defaultUrls.join('\n');
+
+      function getUrlsFromTextarea() {
+        return urlInput.value
+          .split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+      }
+
+      function renderUrlList() {
+        const urls = getUrlsFromTextarea();
+        urlList.innerHTML = '';
+        urls.forEach(url => {
+          const chip = document.createElement('button');
+          chip.className = 'chip';
+          chip.textContent = url;
+          chip.title = '点击从此URL读取并开始测试';
+          chip.addEventListener('click', () => loadUrl(url));
+          urlList.appendChild(chip);
+        });
+      }
+
+      async function loadUrl(url) {
+        resetAll();
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const text = await resp.text();
+          const lines = parseLines(text);
+          if (lines.length === 0) {
+            alert('URL内容为空或只有空行，请检查文件。');
+            return;
+          }
+          startQuiz(lines, url);
+        } catch (err) {
+          alert('从URL读取失败，请确认地址可访问且允许跨域。');
+          console.error(err);
+        }
+      }
+
+      if (urlSaveBtn) urlSaveBtn.addEventListener('click', renderUrlList);
+      renderUrlList();
+
+      el('btnWrong').addEventListener('click', () => answer(false));
+      el('btnRight').addEventListener('click', () => answer(true));
+
+      document.addEventListener('keydown', (e) => {
+        if (el('quiz').classList.contains('hidden')) return;
+        if (remaining.length === 0) return;
+        if (e.key === 'ArrowLeft') answer(false);
+        if (e.key === 'ArrowRight' || e.key === ' ') answer(true);
+        if (e.key === 'Escape') endQuizNow();
+      });
+
+      el('restartBtn').addEventListener('click', () => {
+        resetAll();
+        el('fileInput').value = '';
+      });
+      el('btnEnd').addEventListener('click', () => endQuizNow());
+    });
+  </script>
+</head>
+<body>
+  <header>
+    <h1>词汇练习 🐶🔤（上传文件，每行一个词/句）</h1>
+  </header>
+  <main>
+    <section class="card" id="upload">
+      <div class="row">
+        <label for="fileInput">上传文本文件（.txt/.csv），读取后自动开始</label>
+        <input type="file" id="fileInput" accept=".txt,.csv" />
+      </div>
+      <p class="hint">每一行作为一个词条，空行会被忽略。</p>
+      <div id="dropzone" class="dropzone">将文件拖拽到这里开始测试 📥</div>
+      <div class="url-card">
+        <h3>从URL读取（点击下方链接开始）</h3>
+        <div class="url-editor">
+          <textarea id="urlListInput" placeholder="每行一个URL，例如:\nhttps://localhost/unit1.txt\nhttps://localhost/unit2.txt"></textarea>
+          <div class="url-actions">
+            <button id="urlListSave" class="btn">保存并刷新列表</button>
+          </div>
+        </div>
+        <div id="urlList" class="url-list"></div>
+        <p class="hint">提示：URL需可直接访问文本文件，内容按行读取。</p>
+      </div>
+    </section>
+
+    <section class="card hidden" id="quiz">
+      <div class="info">
+        <span class="badge" id="fileName"></span>
+        <span id="progress">进度：0/0</span>
+        <span id="mistakes">错误：0</span>
+      </div>
+      <div class="term" id="term"></div>
+      <div class="feedback" id="feedback"></div>
+      <div class="actions">
+        <button id="btnWrong" class="btn btn-wrong" disabled>忘记了</button>
+        <button id="btnRight" class="btn btn-right" disabled>掌握了</button>
+        <button id="btnEnd" class="btn btn-accent" disabled>结束测试</button>
+      </div>
+      <p class="hint" style="text-align:center;margin-top:8px;">快捷键：← 忘记了，→ 或空格 掌握了，Esc 结束测试</p>
+    </section>
+
+    <section class="card results hidden" id="results">
+      <h2>测试结果</h2>
+      <div class="summary">
+        <span class="item" id="summaryTotal"></span>
+        <span class="item" id="summaryMistakes"></span>
+        <span class="item" id="summaryErrorRate"></span>
+        <span class="item" id="summaryScore"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>词条</th>
+            <th>平均回答时间（秒）</th>
+            <th>出现次数</th>
+            <th>错误次数</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+      <div style="margin-top: 12px;">
+        <button id="restartBtn" class="btn">重新开始</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
