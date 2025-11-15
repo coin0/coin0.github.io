@@ -1,0 +1,27 @@
+family
+dad
+mom
+grandpa
+grandma
+
+teacher
+our teachers
+my English teacher
+I learn English
+You learn English
+We learn English
+
+I
+you
+we
+he
+she
+they
+
+my
+your
+our
+his
+her
+their
+
