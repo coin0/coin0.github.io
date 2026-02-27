@@ -1,0 +1,370 @@
+项目名称：WebRTC PCDN 级联直播系统 - 三期质量增强需求
+版本目标：从功能演示走向健壮可靠的分布式媒体网络
+一、全局TURN配置与服务发现
+1.1 背景与痛点
+二期允许每个用户手动配置TURN，但这对普通用户不友好，且无法统一管理。生产环境需要服务端统一下发TURN配置，用户端零配置即可使用，同时保留高级用户的自定义能力。
+
+1.2 功能需求
+1.2.1 服务端TURN配置中心
+
+信令服务器启动时加载TURN配置（配置文件或环境变量）
+
+支持配置多个TURN服务器，支持负载均衡策略
+
+支持TURN服务器动态发现（通过DNS SRV记录或API接口）
+
+1.2.2 客户端自动获取TURN配置
+
+客户端连接信令服务器时，自动获取服务端下发的TURN配置列表
+
+配置格式：
+
+json
+{
+  "iceServers": [
+    {
+      "urls": ["turn:turn1.example.com:3478", "turn:turn2.example.com:3478"],
+      "username": "动态生成或固定",
+      "credential": "动态生成或固定",
+      "priority": 1
+    }
+  ],
+  "iceTransportPolicy": "all", // 或 "relay"（强制TURN）
+  "enableDynamicCredentials": true // 是否启用动态凭证
+}
+1.2.3 动态TURN凭证（安全增强）
+
+支持TURN临时凭证生成（基于时间戳的HMAC）
+
+凭证有效期可配置（如24小时），防止凭证泄露后被长期滥用
+
+客户端在凭证过期前自动请求刷新
+
+1.2.4 自定义TURN配置覆盖
+
+在“高级设置”面板中保留手动配置入口
+
+提供选项：“使用服务器默认配置”/“手动配置TURN”
+
+手动配置的TURN服务器优先级高于服务端下发的配置
+
+支持测试TURN连通性（点击“测试连接”按钮）
+
+1.2.5 TURN使用情况监控
+
+在拓扑图中标识哪些连接使用了TURN中继
+
+统计TURN带宽使用量（用于成本分析）
+
+告警：当TURN使用率超过阈值时通知管理员
+
+1.3 技术实现要点
+javascript
+// 服务端TURN配置下发
+socket.on('connect', () => {
+  socket.emit('request-turn-config');
+});
+
+socket.on('turn-config', (config) => {
+  // 合并用户自定义配置
+  const finalConfig = mergeConfig(config, userCustomConfig);
+  updatePeerConnections(finalConfig);
+});
+
+// 动态凭证生成（服务端）
+function generateTurnCredentials(username, expiryHours = 24) {
+  const expiry = Math.floor(Date.now() / 1000) + expiryHours * 3600;
+  const hmac = crypto.createHmac('sha1', secretKey);
+  hmac.update(`${expiry}:${username}`);
+  const password = hmac.digest('base64');
+  return { username: `${expiry}:${username}`, password };
+}
+二、多父节点冗余：从树到有向图
+2.1 背景与痛点
+树状拓扑的致命弱点：中间节点断开，整个子树都断流。三期需要将拓扑从单链进化到多源冗余，每个观众同时连接多个上游，实现无缝切换。
+
+2.2 功能需求
+2.2.1 多父节点连接策略
+
+每个观众同时维护 2-3个上游连接（主连接 + 备用连接）
+
+主连接：负责视频流的实时播放
+
+备用连接：仅维持连接，接收关键帧或低码率流（或仅维持DataChannel，不传输视频）
+
+连接数上限可配置（考虑浏览器限制和用户带宽）
+
+2.2.2 智能上游选择算法
+
+javascript
+// 上游节点评分机制
+function scorePeer(peer) {
+  let score = 0;
+  // 1. 网络质量（RTT、丢包率）
+  score += (1000 - rtt) * 0.3;
+  score += (100 - packetLoss) * 0.3;
+  
+  // 2. 可用带宽（上行/下行）
+  score += availableBandwidth * 0.2;
+  
+  // 3. 节点稳定性（在线时长、历史断开次数）
+  score += stability * 0.1;
+  
+  // 4. 拓扑多样性（避免所有上游都在同一子树）
+  score += diversityFactor * 0.1;
+  
+  return score;
+}
+2.2.3 无缝切换机制
+
+主连接质量下降时，自动提升一个备用连接为主连接
+
+切换过程保持视频连续：
+
+策略一：备用连接也接收视频，但仅缓存关键帧，切换时快速渲染
+
+策略二：使用SVC（可伸缩视频编码）或Simulcast，备用连接接收低分辨率流
+
+策略三：通过DataChannel同步播放时间戳，切换时对齐
+
+2.2.4 多源视频同步（进阶）
+
+当同时从多个上游接收视频时，需要解决音画同步问题
+
+使用NTP时间戳或自定义同步协议
+
+播放器根据RTT调整缓冲延迟
+
+2.2.5 连接数量自适应
+
+根据设备性能和网络状况动态调整上游连接数
+
+高性能设备可维持更多备用连接
+
+弱网环境下减少连接数，避免资源竞争
+
+2.3 技术实现要点
+javascript
+class RedundantPeerConnection {
+  constructor(upstreamPeers) {
+    this.primary = null;
+    this.backups = [];
+    this.videoBuffers = new Map();
+    
+    // 初始化多个连接
+    upstreamPeers.forEach((peer, index) => {
+      const pc = createPeerConnection(peer);
+      if (index === 0) {
+        this.primary = { pc, peer, quality: 'high' };
+      } else {
+        this.backups.push({ 
+          pc, 
+          peer, 
+          quality: 'low', // 低质量备用
+          active: true 
+        });
+      }
+    });
+  }
+  
+  async switchPrimary(newPrimaryPeer) {
+    // 找到对应的备用连接
+    const backup = this.backups.find(b => b.peer.id === newPrimaryPeer.id);
+    if (!backup) return;
+    
+    // 升级备用连接为主连接
+    backup.quality = 'high';
+    this.primary = backup;
+    
+    // 从主连接中获取最新帧
+    await this.syncFromPrimary();
+    
+    // 通知播放器切换源
+    this.onPrimaryChanged(backup);
+  }
+}
+三、主播稳定性与快速重建
+3.1 背景与痛点
+主播可能因网络波动、浏览器刷新或意外断开而离开。当前设计会导致整个直播中断。三期需要实现主播快速重建和状态恢复机制。
+
+3.2 功能需求
+3.2.1 主播状态持久化
+
+主播断开时，房间进入“主播离线”状态，保留一段时间（如5分钟）
+
+房间内观众保持现有连接，继续观看已缓存的流（如果还有上游）
+
+观众端显示“主播暂时离开，正在尝试重连...”
+
+3.2.2 主播快速重建
+
+主播重新加入时，使用相同的房间ID和身份凭证
+
+重建流程：
+
+主播连接信令服务器，声明自己是原主播
+信令服务器验证身份（基于token或临时密码）
+验证通过后，将新主播节点标记为“活跃主播”
+原有PCDN树逐步迁移到新主播：
+新主播开始推流
+原主播的直接子节点自动切换到新主播
+更深层的节点通过父节点更新逐步感知变化
+3.2.3 主播热备（进阶）
+
+支持配置“备用主播”（如管理员账号）
+
+当主主播断开时，备用主播可一键接管
+
+接管过程保持观众端无感知
+
+3.2.4 流媒体缓存与回放
+
+观众端缓存最近5-10秒的视频数据
+
+主播断开的短暂间隙，播放缓存内容
+
+如果主播长时间未恢复，显示“直播已结束”
+
+3.3 技术实现要点
+javascript
+// 主播重建协议
+socket.on('publisher-reconnect', async (roomId, token) => {
+  // 验证token
+  const isValid = await validatePublisherToken(roomId, token);
+  if (!isValid) return socket.emit('error', '认证失败');
+  
+  // 获取房间当前状态
+  const roomState = await getRoomState(roomId);
+  
+  // 通知所有观众：主播正在重建
+  socket.to(roomId).emit('publisher-reconnecting');
+  
+  // 注册新主播
+  const newPublisherId = socket.id;
+  await setActivePublisher(roomId, newPublisherId);
+  
+  // 将原主播的直接子节点列表返回给新主播
+  socket.emit('reconnect-children', roomState.directChildren);
+  
+  // 新主播开始推流后，通知所有观众重建完成
+  socket.on('publisher-ready', () => {
+    socket.to(roomId).emit('publisher-reconnected', newPublisherId);
+  });
+});
+
+// 观众端处理主播重建
+socket.on('publisher-reconnecting', () => {
+  showMessage('主播正在重连...');
+  // 继续播放缓存，不中断
+});
+
+socket.on('publisher-reconnected', (newPublisherId) => {
+  // 如果是直接子节点，立即连接到新主播
+  if (isDirectChild) {
+    connectToPublisher(newPublisherId);
+  }
+  // 非直接子节点不受影响，因为他们的父节点还在
+  hideReconnectMessage();
+});
+四、网络质量监控与自适应
+4.1 背景与痛点
+多父节点需要基于实时网络质量做决策，需要建立完善的监控体系。
+
+4.2 功能需求
+4.2.1 实时质量指标采集
+
+每个WebRTC连接采集：
+
+RTT（往返时延）
+
+丢包率
+
+抖动（Jitter）
+
+可用带宽（通过BWE算法估算）
+
+连接建立时间
+
+ICE候选类型（host/prflx/relay）
+
+4.2.2 全局拓扑优化
+
+定期运行优化算法，调整上游选择
+
+考虑因素：
+
+避免单点过载（每个节点的子节点数限制）
+
+最小化端到端延迟
+
+最大化P2P直连比例（减少TURN成本）
+
+4.2.3 质量劣化预警
+
+当节点质量下降时，提前准备切换
+
+预警阈值可配置（如RTT > 500ms，丢包率 > 5%）
+
+4.3 技术实现
+javascript
+// WebRTC统计信息获取
+async function getConnectionStats(pc) {
+  const stats = await pc.getStats();
+  const result = {
+    rtt: 0,
+    packetsLost: 0,
+    jitter: 0,
+    availableBandwidth: 0
+  };
+  
+  stats.forEach(report => {
+    if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+      result.rtt = report.currentRoundTripTime * 1000; // 转为毫秒
+    }
+    if (report.type === 'inbound-rtp') {
+      result.packetsLost = report.packetsLost;
+      result.jitter = report.jitter * 1000;
+    }
+    if (report.type === 'bandwidth-estimation') {
+      result.availableBandwidth = report.availableBandwidth;
+    }
+  });
+  
+  return result;
+}
+五、三期验收标准
+TURN配置自动化：新用户加入房间，自动获取TURN配置，无需手动设置，连接成功率>95%
+
+多父节点冗余：
+
+模拟中间节点断开，下游观众视频播放无感知中断（切换时间<500ms）
+
+拓扑图中显示每个节点的多个上游连接
+
+主播快速重建：
+
+主播断开后重新加入，房间在10秒内恢复直播
+
+观众端显示“主播重连成功”，视频恢复播放
+
+网络自适应：
+
+在弱网环境下（模拟丢包10%），系统能自动调整码率或切换上游
+
+拓扑优化算法能自动平衡各节点负载
+
+资源消耗：
+
+多连接策略不会导致浏览器内存或CPU显著上升（控制在单连接的2倍以内）
+
+备用连接带宽消耗控制在主连接的30%以内
+
+六、三期需求优先级
+优先级	功能模块	预计工作量	说明
+P0	全局TURN配置下发	2天	用户体验基础
+P0	主播快速重建	3天	直播连续性核心
+P1	多父节点（主+备）	4天	冗余机制核心
+P1	网络质量监控	2天	决策基础
+P2	无缝切换算法	3天	体验优化
+P2	拓扑优化调度	3天	性能优化
+P3	主播热备	2天	高可用增强
