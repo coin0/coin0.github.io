@@ -295,11 +295,12 @@ video { width: 100%; border-radius: 6px; background: #000; }
         <h2>👀 观看中</h2>
         <div class="controls">
           <button class="btn btn-danger btn-sm" onclick="leaveRoom()">离开房间</button>
+          <button class="btn btn-success btn-sm" id="btnUnmute" onclick="unmuteVideo()">🔊 开启声音</button>
         </div>
         <div class="status" id="viewerStatus"></div>
         <div class="ice-status" id="iceStatus"></div>
         <div style="position:relative">
-          <video id="remoteVideo" autoplay playsinline style="width:100%;max-width:640px;border-radius:6px;background:#000"></video>
+          <video id="remoteVideo" autoplay muted playsinline webkit-playsinline style="width:100%;max-width:640px;border-radius:6px;background:#000"></video>
           <div class="danmaku-container" id="danmakuContainer"></div>
         </div>
         <div class="label" id="remoteVideoLabel" style="font-size:11px;color:var(--muted);margin-top:4px"></div>

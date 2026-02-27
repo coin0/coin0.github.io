@@ -480,6 +480,43 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('topologyUpdate', buildTopology(room));
   });
 
+  // ---- Client-initiated reassign (stream stalled) ----
+  socket.on('requestReassign', ({ reason }) => {
+    if (!currentRoom || !rooms[currentRoom]) return;
+    const room = rooms[currentRoom];
+    const info = room.peers.get(socket.id);
+    if (!info) return;
+
+    console.log(`[requestReassign] ${socket.id} reason=${reason} oldParent=${info.parentId}`);
+
+    // Decrement old parent's child count
+    if (info.parentId) {
+      const oldParent = room.peers.get(info.parentId);
+      if (oldParent) oldParent.childCount = Math.max(0, oldParent.childCount - 1);
+    }
+
+    info.parentId = null;
+    info.backupParentId = null;
+    info.isReady = false;
+
+    // Find a new parent (excluding the old dead one if possible)
+    const newParent = selectParent(room, socket.id);
+    if (newParent) {
+      info.parentId = newParent;
+      const np = room.peers.get(newParent);
+      if (np) np.childCount++;
+      const newBackup = selectBackupParent(room, socket.id, newParent);
+      info.backupParentId = newBackup;
+      socket.emit('reassign', { newParentId: newParent, backupParentId: newBackup, reason: reason || 'stream-stalled' });
+      console.log(`[requestReassign] ${socket.id} -> new parent=${newParent} backup=${newBackup}`);
+    } else {
+      socket.emit('reassign', { newParentId: null, reason: 'no-parent' });
+    }
+
+    io.to(currentRoom).emit('topologyUpdate', buildTopology(room));
+    emitRoomStats(currentRoom);
+  });
+
   // ---- Disconnect ----
   socket.on('disconnect', () => {
     console.log(`[disconnect] ${socket.id}`);

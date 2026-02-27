@@ -100,14 +100,18 @@ function initSocket() {
   socket.on('reassign', async function(d) {
     log('父节点变更: '+(d.newParentId||'无')+' 原因:'+(d.reason||''),'warn');
     showReconnectOverlay(true);
+    resetHealthState();
     if (primaryParentId && connections.has(primaryParentId)) { connections.get(primaryParentId).pc.close(); connections.delete(primaryParentId); }
+    if (backupParentId && connections.has(backupParentId)) { connections.get(backupParentId).pc.close(); connections.delete(backupParentId); backupParentId = null; }
     receivedStream = null;
     if (!d.newParentId) { showReconnectOverlay(false); return; }
     primaryParentId = d.newParentId;
     await connectToParent(primaryParentId, 'primary');
+    if (d.backupParentId) { backupParentId = d.backupParentId; await connectToParent(backupParentId, 'backup'); }
   });
   socket.on('promoteBackupToPrimary', async function(d) {
     log('备用连接提升为主连接: '+d.newPrimaryId.substring(0,8));
+    resetHealthState();
     var bc = connections.get(d.newPrimaryId);
     if (bc && bc.role === 'backup') {
       bc.role = 'primary'; primaryParentId = d.newPrimaryId; backupParentId = null;
@@ -268,11 +272,17 @@ async function connectToParent(targetId, role) {
   };
   pc.ontrack = function(e){
     log('收到轨道('+role+'): '+e.track.kind+' from '+targetId.substring(0,8));
-    if (!ci.stream) ci.stream = new MediaStream();
-    ci.stream.addTrack(e.track);
+    // Prefer the remote stream provided by the browser (more reliable on iOS Safari)
+    var remoteStream = (e.streams && e.streams[0]) ? e.streams[0] : null;
+    if (remoteStream) {
+      ci.stream = remoteStream;
+    } else {
+      if (!ci.stream) ci.stream = new MediaStream();
+      ci.stream.addTrack(e.track);
+    }
     if (role==='primary') {
       receivedStream = ci.stream; showRemoteVideo(targetId, receivedStream);
-      if (receivedStream.getVideoTracks().length>0 && receivedStream.getAudioTracks().length>0) { socket.emit('peerReady'); log('已标记为可转发节点'); }
+      if (ci.stream.getVideoTracks().length>0 && ci.stream.getAudioTracks().length>0) { socket.emit('peerReady'); log('已标记为可转发节点'); }
     }
   };
   var offer = await pc.createOffer(); await pc.setLocalDescription(offer);
@@ -293,7 +303,7 @@ async function handleSignal(fromId, data) {
     pc.oniceconnectionstatechange = function(){ ci.iceState=pc.iceConnectionState; log('ICE(子) '+fromId.substring(0,8)+': '+pc.iceConnectionState); updateIceStatusUI(); };
     pc.ondatachannel = function(e){ ci.dc=e.channel; e.channel.onmessage=function(ev){handleDcMessage(JSON.parse(ev.data),fromId);}; };
     var stream = myRole==='publisher'?localStream:receivedStream;
-    if (stream) { stream.getTracks().forEach(function(t){pc.addTrack(t,stream);}); log('添加 '+stream.getTracks().length+' 轨道 -> '+fromId.substring(0,8)); }
+    if (stream && stream.getTracks().length > 0) { stream.getTracks().forEach(function(t){pc.addTrack(t,stream);}); log('添加 '+stream.getTracks().length+' 轨道 -> '+fromId.substring(0,8)); }
     else { log('无可发送流 -> '+fromId.substring(0,8),'warn'); }
     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
     var answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
@@ -364,8 +374,41 @@ function renderRoomList(list) {
   });
 }
 function showRemoteVideo(peerId, stream) {
-  var v=document.getElementById('remoteVideo'); if(v&&v.srcObject!==stream)v.srcObject=stream;
+  var v=document.getElementById('remoteVideo');
+  if(!v) return;
+  if(v.srcObject!==stream) {
+    v.srcObject=stream;
+  }
+  // iOS Safari requires explicit play() call after srcObject assignment
+  // and may reject it without user gesture — catch and retry on interaction
+  var playPromise = v.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(function(err) {
+      log('视频自动播放被阻止: '+err.message+' (点击页面任意位置恢复)','warn');
+      // Retry play on next user interaction
+      function resumePlay() {
+        v.play().catch(function(){});
+        document.removeEventListener('touchstart', resumePlay);
+        document.removeEventListener('click', resumePlay);
+      }
+      document.addEventListener('touchstart', resumePlay, {once:true});
+      document.addEventListener('click', resumePlay, {once:true});
+    });
+  }
+  // Update unmute button state
+  var btn = document.getElementById('btnUnmute');
+  if (btn) btn.textContent = v.muted ? '🔊 开启声音' : '🔇 静音';
   var l=document.getElementById('remoteVideoLabel'); if(l)l.innerHTML='连接自: <span style="color:var(--accent2)">'+peerId.substring(0,8)+'...</span>';
+}
+
+function unmuteVideo() {
+  var v = document.getElementById('remoteVideo');
+  if (!v) return;
+  v.muted = !v.muted;
+  var btn = document.getElementById('btnUnmute');
+  if (btn) btn.textContent = v.muted ? '🔊 开启声音' : '🔇 静音';
+  // On iOS, toggling muted may require a play() call
+  if (!v.muted) v.play().catch(function(){});
 }
 
 
@@ -522,10 +565,130 @@ document.addEventListener('click', function(e) {
 });
 
 // ============================================================
+// Stream health monitoring
+// ============================================================
+var HEALTH_CHECK_INTERVAL = 3000;  // check every 3s
+var STALL_THRESHOLD = 3;           // consecutive stalls before failover
+var streamHealthState = {
+  prevBytesReceived: 0,
+  stallCount: 0,
+  failoverInProgress: false
+};
+
+function resetHealthState() {
+  streamHealthState.prevBytesReceived = 0;
+  streamHealthState.stallCount = 0;
+  streamHealthState.failoverInProgress = false;
+}
+
+async function checkStreamHealth() {
+  if (!socket || !myPeerId || myRole !== 'viewer') return;
+  if (streamHealthState.failoverInProgress) return;
+
+  var primaryConn = primaryParentId ? connections.get(primaryParentId) : null;
+  if (!primaryConn || !primaryConn.pc || primaryConn.pc.connectionState === 'closed') return;
+
+  // Only check when ICE looks healthy — that's the whole point of this monitor
+  var iceState = primaryConn.pc.iceConnectionState;
+  if (iceState !== 'connected' && iceState !== 'completed') {
+    // ICE itself is broken — normal ICE failure handling will kick in
+    resetHealthState();
+    return;
+  }
+
+  try {
+    var stats = await primaryConn.pc.getStats();
+    var totalBytes = 0;
+    var hasInbound = false;
+    stats.forEach(function(report) {
+      if (report.type === 'inbound-rtp' && report.kind === 'video') {
+        totalBytes += report.bytesReceived || 0;
+        hasInbound = true;
+      }
+    });
+
+    if (!hasInbound) return; // no inbound video track yet
+
+    if (streamHealthState.prevBytesReceived > 0 && totalBytes <= streamHealthState.prevBytesReceived) {
+      streamHealthState.stallCount++;
+      log('流量停滞检测 (' + streamHealthState.stallCount + '/' + STALL_THRESHOLD + ') bytes=' + totalBytes, 'warn');
+
+      if (streamHealthState.stallCount >= STALL_THRESHOLD) {
+        log('主连接流量持续停滞，触发故障转移', 'error');
+        triggerStreamFailover();
+      }
+    } else {
+      // Bytes are flowing, reset stall counter
+      if (streamHealthState.stallCount > 0) {
+        streamHealthState.stallCount = 0;
+      }
+    }
+    streamHealthState.prevBytesReceived = totalBytes;
+  } catch (e) { /* ignore stats errors */ }
+}
+
+async function triggerStreamFailover() {
+  if (streamHealthState.failoverInProgress) return;
+  streamHealthState.failoverInProgress = true;
+  showReconnectOverlay(true);
+
+  // Strategy 1: promote backup if available and healthy
+  if (backupParentId && connections.has(backupParentId)) {
+    var backupConn = connections.get(backupParentId);
+    if (backupConn && backupConn.pc &&
+        (backupConn.pc.iceConnectionState === 'connected' || backupConn.pc.iceConnectionState === 'completed')) {
+      log('故障转移: 提升备用连接 ' + backupParentId.substring(0, 8) + ' 为主连接');
+
+      // Close dead primary
+      var oldPrimary = primaryParentId;
+      var oldConn = connections.get(oldPrimary);
+      if (oldConn) { oldConn.pc.close(); connections.delete(oldPrimary); }
+
+      // Promote backup
+      backupConn.role = 'primary';
+      var newPrimary = backupParentId;
+      primaryParentId = newPrimary;
+      backupParentId = null;
+
+      if (backupConn.stream) {
+        receivedStream = backupConn.stream;
+        showRemoteVideo(newPrimary, receivedStream);
+      }
+
+      // Notify server of the promotion
+      socket.emit('promoteBackup', { oldPrimaryId: oldPrimary, newPrimaryId: newPrimary }, function(res) {
+        if (res && res.newBackupId) {
+          backupParentId = res.newBackupId;
+          connectToParent(backupParentId, 'backup');
+        }
+      });
+
+      showReconnectOverlay(false);
+      resetHealthState();
+      log('故障转移完成 (备用提升)');
+      return;
+    }
+  }
+
+  // Strategy 2: no usable backup — close dead primary and ask server for reassignment
+  log('故障转移: 无可用备用连接，请求服务器重新分配');
+  var deadPrimary = primaryParentId;
+  var deadConn = connections.get(deadPrimary);
+  if (deadConn) { deadConn.pc.close(); connections.delete(deadPrimary); }
+  primaryParentId = null;
+  receivedStream = null;
+
+  socket.emit('requestReassign', { reason: 'stream-stalled' });
+  resetHealthState();
+}
+
+// ============================================================
 // Stats collection & reporting
 // ============================================================
 setInterval(function() {
   if (!socket || !myPeerId) return;
+
+  // Collect stats for all connections
   connections.forEach(function(conn, pid) {
     if (!conn.pc || conn.pc.connectionState === 'closed') return;
     conn.pc.getStats().then(function(stats) {
@@ -544,12 +707,16 @@ setInterval(function() {
       conn.stats = { rtt: rtt, packetLoss: packetLoss, jitter: jitter, bytesReceived: bytesReceived, bytesSent: bytesSent };
     }).catch(function() {});
   });
+
   // Report aggregated stats to server
-  var primaryConn = connections.get(primaryParentId);
+  var primaryConn = primaryParentId ? connections.get(primaryParentId) : null;
   if (primaryConn && primaryConn.stats) {
     socket.emit('reportStats', primaryConn.stats);
   }
-}, 5000);
+
+  // Run stream health check
+  checkStreamHealth();
+}, HEALTH_CHECK_INTERVAL);
 
 // ============================================================
 // Cleanup
