@@ -1,0 +1,330 @@
+项目名称：WebRTC PCDN 级联直播系统 - 二期增强需求
+版本目标：从演示原型走向可用性产品
+一、网络穿透增强：可配置TURN/STUN服务器
+1.1 背景与痛点
+一期Demo仅使用公共STUN服务器，在复杂网络环境（对称NAT、企业防火墙）下，大量P2P连接会失败，导致观众无法观看。
+
+1.2 功能需求
+1.2.1 TURN服务器配置界面
+
+在主播端和观众端增加“网络设置”面板（可折叠）
+
+提供配置项：
+
+STUN服务器地址（支持多个，默认Google公共STUN）
+
+TURN服务器地址（支持多个）
+
+TURN用户名/密码（支持长期凭证或临时凭证生成）
+
+“使用TURE回退”开关：当P2P直连失败时自动切换到TURN中继
+
+1.2.2 ICE连接状态监控
+
+在UI上显示每个连接的ICE连接状态（new/checking/connected/completed/failed/disconnected/closed）
+
+对于失败的连接，显示失败原因（如“需要TURN中继”）
+
+提供“重新连接”按钮，手动触发ICE重启
+
+1.2.3 TURN服务器负载均衡（进阶）
+
+当观众数量增多时，自动轮询多个TURN服务器
+
+避免单个TURN服务器过载
+
+1.3 技术实现要点
+javascript
+// 配置示例
+const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { 
+    urls: 'turn:turn.example.com:3478',
+    username: 'user',
+    credential: 'pass'
+  }
+];
+
+// ICE失败重试机制
+peerConnection.oniceconnectionstatechange = () => {
+  if (pc.iceConnectionState === 'failed') {
+    // 尝试重启ICE
+    pc.restartIce();
+    // 或者提示用户需要配置TURN
+  }
+};
+二、主播端增强：屏幕共享
+2.1 背景与痛点
+仅支持摄像头直播，应用场景受限。屏幕共享可用于远程教学、产品演示、游戏直播等。
+
+2.2 功能需求
+2.2.1 多源采集
+
+摄像头模式：默认模式，采集摄像头画面
+
+屏幕共享模式：通过getDisplayMedia采集屏幕
+
+混合模式（进阶）：同时采集摄像头（画中画）和屏幕，或两者切换
+
+2.2.2 屏幕共享控制
+
+“开始共享屏幕”按钮，调用浏览器屏幕选择对话框
+
+支持选择：整个屏幕、应用窗口、浏览器标签页
+
+共享过程中显示“正在共享屏幕”提示条
+
+“停止共享”按钮，恢复摄像头模式（或停止直播）
+
+2.2.3 分辨率与帧率控制
+
+提供下拉选项：自动/720p/1080p
+
+帧率选项：15fps/30fps（屏幕共享通常15fps足够）
+
+带宽预估：根据网络状况动态调整输出码率
+
+2.3 技术实现要点
+javascript
+// 屏幕共享获取
+async function startScreenShare() {
+  try {
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        cursor: 'always',
+        displaySurface: 'monitor', // 或 'window', 'browser'
+      },
+      audio: false // 屏幕共享一般不采集系统音频
+    });
+    
+    // 替换现有视频轨道
+    const [videoTrack] = screenStream.getVideoTracks();
+    const senders = pc.getSenders();
+    const videoSender = senders.find(s => s.track.kind === 'video');
+    await videoSender.replaceTrack(videoTrack);
+    
+    // 监听屏幕共享停止
+    videoTrack.onended = () => {
+      // 切换回摄像头
+      restoreCamera();
+    };
+  } catch (err) {
+    console.error('屏幕共享失败:', err);
+  }
+}
+三、互动增强：DataChannel 聊天与信令
+3.1 背景与痛点
+纯视频直播缺乏互动，观众之间无法交流，主播也无法收到反馈。
+
+3.2 功能需求
+3.2.1 直播间文字聊天
+
+在界面右侧增加聊天面板
+
+支持所有人可见的公共聊天
+
+消息格式：[昵称]: 消息内容
+
+消息存储：最近50条消息保存在内存中，新加入观众可看到历史消息
+
+3.2.2 基于DataChannel的P2P聊天实现
+
+每个WebRTC连接建立成功后，同时创建DataChannel
+
+观众发送的消息通过PCDN树向上传递到主播，再广播给所有节点
+
+消息路由策略：
+
+观众 -> 父节点 -> 父节点的父节点 -> ... -> 主播
+
+主播 -> 所有直接子节点 -> 子节点的子节点 -> ...（广播）
+
+这样形成基于PCDN树的消息分发，不依赖服务器
+
+3.2.3 弹幕效果（可选）
+
+简单的弹幕飘过效果
+
+弹幕通过DataChannel传输，在视频画面上方渲染
+
+3.2.4 简单点赞/表情互动
+
+观众可发送表情（👍❤️🎉）
+
+主播端显示点赞计数器
+
+点赞消息同样通过DataChannel树传播
+
+3.3 技术实现要点
+javascript
+// 创建DataChannel
+function setupDataChannel(pc, label, onMessage) {
+  const dc = pc.createDataChannel(label, { reliable: true });
+  
+  dc.onopen = () => console.log('DataChannel opened');
+  dc.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    handleChatMessage(data);
+    // 如果是需要广播的消息，继续向上/向下转发
+    forwardMessage(data);
+  };
+  
+  return dc;
+}
+
+// 消息转发逻辑
+function forwardMessage(msg) {
+  // 如果是观众->主播方向
+  if (msg.direction === 'up') {
+    if (isPublisher()) {
+      // 主播收到，广播给所有子节点
+      broadcastToChildren(msg);
+    } else {
+      // 观众收到，转发给父节点
+      sendToParent(msg);
+    }
+  }
+  
+  // 如果是主播->观众方向（广播）
+  if (msg.direction === 'down') {
+    // 转发给所有子节点
+    broadcastToChildren(msg);
+  }
+}
+四、网络拓扑可视化
+4.1 背景与痛点
+调试和演示时，无法直观看到PCDN树的构成，不利于理解工作原理和排查问题。
+
+4.2 功能需求
+4.2.1 实时拓扑图
+
+在界面上增加“网络拓扑”标签页
+
+用图形化方式展示当前PCDN树结构
+
+节点标识：
+
+🎥 主播（根节点）
+
+👤 普通观众
+
+🔁 中继节点（有子节点的观众）
+
+🚫 离线节点
+
+4.2.2 连接质量指示
+
+每条连接线上显示：
+
+延迟（RTT，通过DataChannel测量）
+
+连接类型（P2P直连 / TURN中继）
+
+带宽使用情况（下行/上行）
+
+4.2.3 节点详情
+
+点击节点显示详情：
+
+Peer ID
+
+连接的父节点
+
+子节点列表
+
+ICE连接状态
+
+视频分辨率/码率
+
+4.3 技术实现
+使用Canvas或D3.js绘制拓扑图
+
+定期收集各节点的连接信息，通过信令服务器汇总（或通过DataChannel交换拓扑信息）
+
+五、房间管理与持久化
+5.1 背景与痛点
+简单Demo的房间号是临时生成，主播退出后房间消失，无法支持长期运营。
+
+5.2 功能需求
+5.2.1 永久房间
+
+主播可创建固定房间ID（如自定义名称）
+
+房间信息持久化到本地存储或简单后端数据库
+
+房间密码保护（可选）：设置观看密码
+
+5.2.2 房间列表
+
+首页显示当前正在直播的房间列表
+
+房间卡片显示：主播名、在线人数、房间主题
+
+5.2.3 观众计数与统计
+
+房间内显示当前在线观众总数
+
+显示当前PCDN树层级深度
+
+显示节省的带宽量（估算）：节省带宽 = 直连消耗 - 实际消耗
+
+5.3 技术实现
+javascript
+// 带宽节省估算公式
+// 假设每个观众消耗1单位带宽
+const directBandwidth = viewerCount; // 直连模式，主播需上传给每个观众
+const pcdnBandwidth = 1 + (viewerCount - 1) / fanout; // 近似计算
+const saved = ((directBandwidth - pcdnBandwidth) / directBandwidth * 100).toFixed(1);
+六、错误处理与用户体验优化
+6.1 断线重连机制
+当父节点离开或网络断开时，子节点自动寻找新的父节点
+
+重连过程中显示“正在重新连接...”提示
+
+保留视频画面最后一帧，避免黑屏闪烁
+
+6.2 带宽自适应
+根据网络状况动态调整视频码率
+
+当上行带宽不足时，自动降低转发质量（如降为480p）
+
+使用WebRTC的RTCRtpSender.setParameters动态调整
+
+6.3 优雅降级
+如果无法建立P2P连接，且未配置TURN，自动切换为“仅观看模式”（不参与转发）
+
+支持纯HTTP流媒体回退（需要额外服务器，可选）
+
+七、二期验收标准
+网络穿透：在不同网络环境（公司网络、家庭网络、4G/5G热点）下，90%以上的观众能成功建立连接
+
+屏幕共享：主播能成功共享整个屏幕或指定窗口，观众清晰看到共享内容
+
+实时聊天：观众发送的消息在2秒内广播给所有在线观众
+
+拓扑可视化：能清晰看到PCDN树结构，验证级联转发逻辑
+
+断线重连：父节点退出后，子节点在10秒内自动恢复播放
+
+带宽节省：10个观众时，主播上行带宽消耗仅为直连模式的30%以下
+
+八、技术栈补充建议
+TURN服务器：推荐coturn（开源），或使用云服务商的TURN服务
+
+信令服务器：Node.js + Socket.io + Redis（用于房间状态持久化）
+
+前端：Vue 3 + TypeScript + Vite（更好的开发体验）
+
+可视化库：D3.js 或 Canvas API
+
+状态管理：Pinia（Vue）或 Redux Toolkit（React）
+
+九、二期需求优先级排序
+优先级	功能模块	预计工作量	说明
+P0	TURN配置与ICE失败处理	2天	保证可用性的基础
+P0	断线重连机制	2天	用户体验的关键
+P1	屏幕共享	1天	核心功能增强
+P1	DataChannel聊天	2天	互动基础
+P2	拓扑可视化	2天	调试与演示用
+P2	带宽自适应	2天	性能优化
+P3	房间持久化	1天	产品化准备

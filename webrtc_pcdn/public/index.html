@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebRTC PCDN 级联直播系统</title>
+<style>
+:root { --bg: #0f0f1a; --panel: #161625; --border: #252540; --accent: #e94560; --accent2: #0f9; --text: #eee; --muted: #888; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* Header */
+.header { text-align: center; padding: 16px; background: var(--panel); border-bottom: 2px solid var(--border); }
+.header h1 { font-size: 22px; color: var(--accent); }
+.header p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+/* Tabs */
+.tabs { display: flex; justify-content: center; gap: 0; background: var(--panel); border-bottom: 1px solid var(--border); }
+.tab { padding: 12px 24px; cursor: pointer; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Layout */
+.container { display: flex; gap: 16px; padding: 16px; max-width: 1600px; margin: 0 auto; }
+.container.col { flex-direction: column; }
+.panel { background: var(--panel); border-radius: 10px; padding: 16px; flex: 1; border: 1px solid var(--border); }
+.panel h2 { font-size: 16px; margin-bottom: 12px; color: var(--accent); }
+.panel h3 { font-size: 14px; margin: 12px 0 8px; color: var(--muted); }
+
+/* Form elements */
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #c73652; }
+.btn-primary:disabled { background: #444; cursor: not-allowed; }
+.btn-secondary { background: #2a2a4a; color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: #353560; }
+.btn-danger { background: #c0392b; color: #fff; }
+.btn-danger:hover { background: #a93226; }
+.btn-success { background: #27ae60; color: #fff; }
+.btn-success:hover { background: #219a52; }
+.btn-warn { background: #e67e22; color: #fff; }
+input[type="text"], input[type="password"], select {
+  padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 13px; width: 100%;
+}
+select { cursor: pointer; }
+.form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.form-row label { font-size: 12px; color: var(--muted); min-width: 80px; white-space: nowrap; }
+.form-row input, .form-row select { flex: 1; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+
+/* Collapsible */
+.collapsible-header { cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin: 8px 0; user-select: none; }
+.collapsible-header:hover { color: var(--text); }
+.collapsible-header::before { content: '▶'; font-size: 10px; transition: transform 0.2s; }
+.collapsible-header.open::before { transform: rotate(90deg); }
+.collapsible-body { display: none; padding: 8px 0; }
+.collapsible-body.open { display: block; }
+
+/* Video */
+video { width: 100%; border-radius: 6px; background: #000; }
+#localVideo { max-width: 480px; margin-top: 8px; }
+.screen-share-banner { background: var(--accent); color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; display: none; margin: 8px 0; }
+
+/* Status badges */
+.status { font-size: 12px; color: var(--muted); margin: 8px 0; }
+.status span { color: var(--accent); font-weight: 600; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-green { background: #1a3a2a; color: #0f9; }
+.badge-yellow { background: #3a3a1a; color: #ff0; }
+.badge-red { background: #3a1a1a; color: #f33; }
+.badge-blue { background: #1a2a3a; color: #39f; }
+
+/* ICE status */
+.ice-status { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.ice-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; display: flex; align-items: center; gap: 4px; }
+.ice-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+/* Viewers grid */
+.viewers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.viewer-card { background: var(--bg); border-radius: 8px; padding: 10px; position: relative; border: 1px solid var(--border); }
+.viewer-card video { width: 100%; }
+.viewer-card .label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.viewer-card .label span { color: var(--accent2); }
+.reconnecting-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #ff0; font-size: 13px; display: none; }
+
+/* Room list */
+.room-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.room-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; cursor: pointer; transition: all 0.2s; }
+.room-card:hover { border-color: var(--accent); }
+.room-card .room-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.room-card .room-meta { font-size: 12px; color: var(--muted); }
+
+/* Chat */
+.chat-panel { display: flex; flex-direction: column; height: 400px; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 8px; background: var(--bg); border-radius: 6px; margin-bottom: 8px; }
+.chat-msg { margin-bottom: 6px; font-size: 13px; }
+.chat-msg .nick { color: var(--accent); font-weight: 600; }
+.chat-msg .time { color: var(--muted); font-size: 11px; margin-left: 6px; }
+.chat-input-row { display: flex; gap: 6px; }
+.chat-input-row input { flex: 1; }
+.emoji-bar { display: flex; gap: 4px; margin-bottom: 6px; }
+.emoji-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 16px; transition: all 0.15s; }
+.emoji-btn:hover { background: var(--border); transform: scale(1.2); }
+
+/* Danmaku */
+.danmaku-container { position: absolute; top: 0; left: 0; right: 0; bottom: 40px; overflow: hidden; pointer-events: none; }
+.danmaku { position: absolute; white-space: nowrap; font-size: 16px; font-weight: 600; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); animation: danmaku-scroll 6s linear forwards; }
+@keyframes danmaku-scroll { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+
+/* Topology canvas */
+#topoCanvas { width: 100%; height: 400px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border); }
+.topo-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.topo-legend-item { display: flex; align-items: center; gap: 4px; }
+.topo-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* Stats bar */
+.stats-bar { display: flex; gap: 20px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); justify-content: center; flex-wrap: wrap; }
+.stat-item { font-size: 13px; color: var(--muted); }
+.stat-item span { color: var(--accent2); font-weight: 600; }
+
+/* Log */
+.log-panel { max-height: 180px; overflow-y: auto; }
+#logArea { font-family: monospace; font-size: 11px; color: var(--muted); }
+.log-entry { margin-bottom: 1px; }
+.log-entry.info { color: var(--accent2); }
+.log-entry.warn { color: #f90; }
+.log-entry.error { color: #f33; }
+
+/* Reactions float */
+.reaction-float { position: fixed; bottom: 100px; right: 30px; pointer-events: none; }
+.reaction-anim { position: absolute; bottom: 0; font-size: 28px; animation: float-up 2s ease-out forwards; }
+@keyframes float-up { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-120px) scale(1.5); } }
+
+/* Node detail popup */
+.node-detail { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; min-width: 240px; z-index: 100; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; }
+.node-detail h4 { color: var(--accent); margin-bottom: 8px; font-size: 14px; }
+.node-detail .detail-row { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.node-detail .detail-row span { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🌐 WebRTC PCDN 级联直播系统</h1>
+  <p>单主播 + 多观众 · 树状级联分发 · P2P加速</p>
+</div>
+
+<!-- Stats Bar -->
+<div class="stats-bar" id="statsBar" style="display:none">
+  <div class="stat-item">👥 在线观众: <span id="statViewers">0</span></div>
+  <div class="stat-item">🌳 树深度: <span id="statDepth">0</span></div>
+  <div class="stat-item">💾 带宽节省: <span id="statSaved">0%</span></div>
+  <div class="stat-item">📡 主播上行: <span id="statPcdn">0</span> 路</div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('lobby')">🏠 大厅</div>
+  <div class="tab" onclick="switchTab('live')">📺 直播</div>
+  <div class="tab" onclick="switchTab('topology')">🌳 拓扑</div>
+  <div class="tab" onclick="switchTab('log')">📋 日志</div>
+</div>
+
+<!-- TAB: Lobby -->
+<div class="tab-content active" id="tab-lobby">
+  <div class="container col">
+    <div class="panel">
+      <h2>📺 正在直播的房间</h2>
+      <div class="room-list" id="roomList"><div style="color:var(--muted);font-size:13px">暂无直播房间</div></div>
+    </div>
+    <div class="container" style="padding:0">
+      <div class="panel">
+        <h2>🎥 创建直播</h2>
+        <div class="form-row"><label>房间号</label><input type="text" id="roomIdInput" value="room1"></div>
+        <div class="form-row"><label>房间标题</label><input type="text" id="roomTitle" placeholder="我的直播间"></div>
+        <div class="form-row"><label>房间密码</label><input type="password" id="roomPassword" placeholder="可选"></div>
+        <div class="form-row"><label>昵称</label><input type="text" id="pubNickname" value="主播"></div>
+        <button class="btn btn-primary" id="btnPublish" onclick="startPublish()">🎥 开始直播</button>
+      </div>
+      <div class="panel">
+        <h2>👀 加入观看</h2>
+        <div class="form-row"><label>房间号</label><input type="text" id="joinRoomInput" value="room1"></div>
+        <div class="form-row"><label>密码</label><input type="password" id="joinPassword" placeholder="如需要"></div>
+        <div class="form-row"><label>昵称</label><input type="text" id="viewerNickname" placeholder="观众"></div>
+        <button class="btn btn-primary" id="btnJoin" onclick="joinAsViewer()">👀 加入观看</button>
+      </div>
+    </div>
+    <!-- Network Settings (collapsible) -->
+    <div class="panel">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">⚙️ 网络设置 (STUN/TURN)</div>
+      <div class="collapsible-body" id="networkSettings">
+        <div class="form-row"><label>STUN 服务器</label><input type="text" id="stunInput" value="stun:stun.l.google.com:19302" placeholder="stun:host:port"></div>
+        <div class="form-row"><label>TURN 地址</label><input type="text" id="turnUrl" placeholder="turn:host:3478"></div>
+        <div class="form-row"><label>TURN 用户名</label><input type="text" id="turnUser" placeholder="username"></div>
+        <div class="form-row"><label>TURN 密码</label><input type="password" id="turnPass" placeholder="password"></div>
+        <div class="form-row">
+          <label>TURN 回退</label>
+          <select id="turnFallback"><option value="auto">自动 (P2P失败时使用TURN)</option><option value="always">始终使用TURN</option><option value="never">仅P2P</option></select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: Live -->
+<div class="tab-content" id="tab-live">
+  <div class="container">
+    <!-- Left: Video area -->
+    <div class="panel" style="flex:2; position:relative;">
+      <div id="publisherArea" style="display:none">
+        <h2>🎥 主播端</h2>
+        <div class="controls">
+          <button class="btn btn-danger btn-sm" onclick="stopPublish()">停止直播</button>
+          <button class="btn btn-secondary btn-sm" id="btnScreenShare" onclick="toggleScreenShare()">🖥️ 共享屏幕</button>
+          <select id="resolutionSelect" onchange="changeResolution()" style="width:100px">
+            <option value="auto">自动</option>
+            <option value="720">720p</option>
+            <option value="1080">1080p</option>
+          </select>
+          <select id="fpsSelect" onchange="changeResolution()" style="width:80px">
+            <option value="30">30fps</option>
+            <option value="15">15fps</option>
+          </select>
+        </div>
+        <div class="screen-share-banner" id="screenShareBanner">🖥️ 正在共享屏幕 <button class="btn btn-sm btn-danger" onclick="stopScreenShare()">停止共享</button></div>
+        <div class="status" id="publisherStatus"></div>
+        <video id="localVideo" autoplay muted playsinline></video>
+      </div>
+      <div id="viewerArea" style="display:none">
+        <h2>👀 观看中</h2>
+        <div class="controls">
+          <button class="btn btn-danger btn-sm" onclick="leaveRoom()">离开房间</button>
+        </div>
+        <div class="status" id="viewerStatus"></div>
+        <div class="ice-status" id="iceStatus"></div>
+        <div style="position:relative">
+          <video id="remoteVideo" autoplay playsinline style="width:100%;max-width:640px;border-radius:6px;background:#000"></video>
+          <div class="danmaku-container" id="danmakuContainer"></div>
+        </div>
+        <div class="label" id="remoteVideoLabel" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+        <div class="reconnecting-overlay" id="reconnectOverlay">🔄 正在重新连接...</div>
+      </div>
+      <div id="noLiveArea">
+        <p style="color:var(--muted);text-align:center;padding:40px">请先在大厅创建或加入直播</p>
+      </div>
+    </div>
+
+    <!-- Right: Chat -->
+    <div class="panel" style="flex:1; min-width: 280px;">
+      <h2>💬 聊天</h2>
+      <div class="chat-panel">
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="emoji-bar">
+          <button class="emoji-btn" onclick="sendReaction('👍')">👍</button>
+          <button class="emoji-btn" onclick="sendReaction('❤️')">❤️</button>
+          <button class="emoji-btn" onclick="sendReaction('🎉')">🎉</button>
+          <button class="emoji-btn" onclick="sendReaction('😂')">😂</button>
+          <button class="emoji-btn" onclick="sendReaction('🔥')">🔥</button>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="发送消息..." onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="btn btn-primary btn-sm" onclick="sendChat()">发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: Topology -->
+<div class="tab-content" id="tab-topology">
+  <div class="container col">
+    <div class="panel">
+      <h2>🌳 网络拓扑可视化</h2>
+      <canvas id="topoCanvas"></canvas>
+      <div class="topo-legend">
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#e94560"></div> 主播</div>
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#27ae60"></div> 中继节点</div>
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#3498db"></div> 观众</div>
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#555"></div> 离线</div>
+      </div>
+    </div>
+    <div class="node-detail" id="nodeDetail">
+      <h4 id="nodeDetailTitle">节点详情</h4>
+      <div id="nodeDetailBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: Log -->
+<div class="tab-content" id="tab-log">
+  <div class="container col">
+    <div class="panel log-panel" style="max-height:600px">
+      <h2>📋 系统日志</h2>
+      <div id="logArea"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Reaction floats -->
+<div class="reaction-float" id="reactionFloat"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ============================================================
+// State
+// ============================================================
+let socket = null;
+let myPeerId = null;
+let myRole = null;
+let myNickname = '';
+let localStream = null;
+let cameraStream = null; // keep camera ref when screen sharing
+let parentId = null;
+let isScreenSharing = false;
+let currentTopology = [];
+
+const connections = new Map(); // peerId -> { pc, role, dc (DataChannel), iceState }
+let receivedStream = null;
+
+// Dedup set for chat/reaction messages (keep last 200 IDs)
+const seenMsgIds = new Set();
+function markSeen(id) {
+  seenMsgIds.add(id);
+  if (seenMsgIds.size > 200) {
+    const first = seenMsgIds.values().next().value;
+    seenMsgIds.delete(first);
+  }
+}
+
+// ============================================================
+// ICE Config
+// ============================================================
+function getIceServers() {
+  const servers = [];
+  const stun = document.getElementById('stunInput').value.trim();
+  if (stun) servers.push({ urls: stun });
+
+  const turnUrl = document.getElementById('turnUrl').value.trim();
+  if (turnUrl) {
+    servers.push({
+      urls: turnUrl,
+      username: document.getElementById('turnUser').value.trim(),
+      credential: document.getElementById('turnPass').value.trim(),
+    });
+  }
+  if (servers.length === 0) servers.push({ urls: 'stun:stun.l.google.com:19302' });
+  return servers;
+}
+
+function getIcePolicy() {
+  const val = document.getElementById('turnFallback').value;
+  if (val === 'always') return 'relay';
+  return 'all';
+}
+
+// ============================================================
+// Logging
+// ============================================================
+function log(msg, level = 'info') {
+  const area = document.getElementById('logArea');
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${level}`;
+  entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  area.appendChild(entry);
+  area.parentElement.scrollTop = area.parentElement.scrollHeight;
+  console.log(`[${level}] ${msg}`);
+}
+
+// ============================================================
+// Tabs
+// ============================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const tabs = ['lobby', 'live', 'topology', 'log'];
+    t.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'topology') drawTopology();
+}
+
+function toggleCollapsible(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
+}
+
+// ============================================================
+// Socket
+// ============================================================
+function initSocket() {
+  if (socket) return;
+  socket = io();
+
+  socket.on('connect', () => log(`已连接信令服务器 id=${socket.id}`));
+
+  socket.on('signal', async ({ fromId, data }) => {
+    try { await handleSignal(fromId, data); }
+    catch (e) { log(`信令处理错误: ${e.message}`, 'error'); }
+  });
+
+  socket.on('topologyUpdate', (nodes) => {
+    currentTopology = nodes;
+    drawTopology();
+    updateIceStatusUI();
+  });
+
+  socket.on('roomList', (list) => renderRoomList(list));
+
+  socket.on('roomStats', (stats) => {
+    document.getElementById('statsBar').style.display = '';
+    document.getElementById('statViewers').textContent = stats.viewerCount;
+    document.getElementById('statDepth').textContent = stats.treeDepth;
+    document.getElementById('statSaved').textContent = stats.bandwidth.savedPercent + '%';
+    document.getElementById('statPcdn').textContent = stats.bandwidth.pcdn;
+  });
+
+  socket.on('roomClosed', () => {
+    log('主播已关闭房间', 'warn');
+    alert('主播已关闭房间');
+    cleanup();
+    switchTab('lobby');
+  });
+
+  socket.on('reassign', async ({ newParentId }) => {
+    log(`父节点断开，重新分配: ${newParentId || '无'}`, 'warn');
+    showReconnectOverlay(true);
+    if (parentId && connections.has(parentId)) {
+      connections.get(parentId).pc.close();
+      connections.delete(parentId);
+    }
+    receivedStream = null;
+    if (!newParentId) { showReconnectOverlay(false); return; }
+    parentId = newParentId;
+    await connectToParent(newParentId);
+  });
+
+  socket.on('chatMessage', (msg) => {
+    if (msg.id && seenMsgIds.has(msg.id)) return;
+    if (msg.id) markSeen(msg.id);
+    appendChatMessage(msg);
+  });
+
+  socket.on('reaction', ({ from, emoji }) => {
+    showReactionFloat(emoji);
+  });
+
+  socket.on('disconnect', () => log('信令断开', 'error'));
+}
+
+// ============================================================
+// Publisher
+// ============================================================
+async function startPublish() {
+  const roomId = document.getElementById('roomIdInput').value.trim();
+  if (!roomId) return alert('请输入房间号');
+  myNickname = document.getElementById('pubNickname').value.trim() || '主播';
+
+  initSocket();
+
+  try {
+    const constraints = getMediaConstraints();
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    cameraStream = localStream;
+    document.getElementById('localVideo').srcObject = localStream;
+    log('已获取本地音视频流');
+  } catch (e) {
+    log(`获取媒体失败: ${e.message}`, 'error');
+    return;
+  }
+
+  socket.emit('createRoom', {
+    roomId,
+    title: document.getElementById('roomTitle').value.trim(),
+    password: document.getElementById('roomPassword').value,
+    nickname: myNickname,
+  }, (res) => {
+    if (res.error) return log(`创建房间失败: ${res.error}`, 'error');
+    myPeerId = res.peerId;
+    myRole = 'publisher';
+    log(`房间 ${roomId} 创建成功`);
+    document.getElementById('publisherArea').style.display = '';
+    document.getElementById('noLiveArea').style.display = 'none';
+    document.getElementById('publisherStatus').innerHTML = `房间: <span>${roomId}</span> | <span>${myNickname}</span>`;
+    switchTab('live');
+  });
+}
+
+function stopPublish() {
+  cleanup();
+  location.reload();
+}
+
+function getMediaConstraints() {
+  const res = document.getElementById('resolutionSelect').value;
+  const fps = parseInt(document.getElementById('fpsSelect').value);
+  const video = {};
+  if (res === '720') { video.width = { ideal: 1280 }; video.height = { ideal: 720 }; }
+  else if (res === '1080') { video.width = { ideal: 1920 }; video.height = { ideal: 1080 }; }
+  video.frameRate = { ideal: fps };
+  return { video, audio: true };
+}
+
+// ============================================================
+// Screen Share
+// ============================================================
+async function toggleScreenShare() {
+  if (isScreenSharing) { stopScreenShare(); return; }
+  try {
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { cursor: 'always' },
+      audio: false,
+    });
+    const [screenTrack] = screenStream.getVideoTracks();
+
+    // Replace track on all child connections
+    for (const [pid, conn] of connections) {
+      if (conn.role === 'child') {
+        const sender = conn.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) await sender.replaceTrack(screenTrack);
+      }
+    }
+
+    // Replace local preview
+    const oldVideoTrack = localStream.getVideoTracks()[0];
+    localStream.removeTrack(oldVideoTrack);
+    localStream.addTrack(screenTrack);
+    document.getElementById('localVideo').srcObject = localStream;
+
+    screenTrack.onended = () => stopScreenShare();
+    isScreenSharing = true;
+    document.getElementById('screenShareBanner').style.display = '';
+    document.getElementById('btnScreenShare').textContent = '📷 恢复摄像头';
+    log('已开始屏幕共享');
+  } catch (e) {
+    log(`屏幕共享失败: ${e.message}`, 'error');
+  }
+}
+
+async function stopScreenShare() {
+  if (!isScreenSharing || !cameraStream) return;
+  const camTrack = cameraStream.getVideoTracks()[0];
+  if (!camTrack) {
+    // Re-acquire camera
+    try {
+      const newCam = await navigator.mediaDevices.getUserMedia({ video: getMediaConstraints().video });
+      const newTrack = newCam.getVideoTracks()[0];
+      await doReplaceVideoTrack(newTrack);
+    } catch (e) { log(`恢复摄像头失败: ${e.message}`, 'error'); }
+  } else {
+    await doReplaceVideoTrack(camTrack);
+  }
+  isScreenSharing = false;
+  document.getElementById('screenShareBanner').style.display = 'none';
+  document.getElementById('btnScreenShare').textContent = '🖥️ 共享屏幕';
+  log('已停止屏幕共享');
+}
+
+async function doReplaceVideoTrack(newTrack) {
+  // Stop current screen track
+  const oldTrack = localStream.getVideoTracks()[0];
+  if (oldTrack && oldTrack !== newTrack) oldTrack.stop();
+  localStream.removeTrack(oldTrack);
+  localStream.addTrack(newTrack);
+  document.getElementById('localVideo').srcObject = localStream;
+
+  for (const [pid, conn] of connections) {
+    if (conn.role === 'child') {
+      const sender = conn.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if (sender) await sender.replaceTrack(newTrack);
+    }
+  }
+}
+
+async function changeResolution() {
+  if (myRole !== 'publisher' || !localStream) return;
+  const constraints = getMediaConstraints();
+  const videoTrack = localStream.getVideoTracks()[0];
+  if (videoTrack && !isScreenSharing) {
+    try {
+      await videoTrack.applyConstraints(constraints.video);
+      log(`分辨率已调整`);
+    } catch (e) { log(`调整分辨率失败: ${e.message}`, 'warn'); }
+  }
+}
+
+// ============================================================
+// Viewer
+// ============================================================
+async function joinAsViewer() {
+  const roomId = document.getElementById('joinRoomInput').value.trim();
+  if (!roomId) return alert('请输入房间号');
+  myNickname = document.getElementById('viewerNickname').value.trim() || `观众${Math.floor(Math.random()*1000)}`;
+
+  initSocket();
+
+  socket.emit('joinRoom', {
+    roomId,
+    password: document.getElementById('joinPassword').value,
+    nickname: myNickname,
+  }, async (res) => {
+    if (res.error) return log(`加入失败: ${res.error}`, 'error');
+    myPeerId = res.peerId;
+    myRole = 'viewer';
+    parentId = res.parentId;
+    log(`已加入 ${roomId}，父节点: ${parentId}`);
+    document.getElementById('viewerArea').style.display = '';
+    document.getElementById('noLiveArea').style.display = 'none';
+    document.getElementById('viewerStatus').innerHTML = `<span>${myNickname}</span> | 连接自: <span>${parentId.substring(0,8)}...</span>`;
+
+    // Load chat history
+    if (res.chatHistory) res.chatHistory.forEach(m => appendChatMessage(m));
+
+    switchTab('live');
+    await connectToParent(parentId);
+  });
+}
+
+function leaveRoom() { cleanup(); location.reload(); }
+
+// ============================================================
+// WebRTC: Connect to parent
+// ============================================================
+async function connectToParent(targetParentId) {
+  const config = { iceServers: getIceServers(), iceTransportPolicy: getIcePolicy() };
+  const pc = new RTCPeerConnection(config);
+  const connInfo = { pc, role: 'parent', dc: null, iceState: 'new' };
+  connections.set(targetParentId, connInfo);
+
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.addTransceiver('audio', { direction: 'recvonly' });
+
+  // DataChannel for chat
+  const dc = pc.createDataChannel('chat', { ordered: true });
+  connInfo.dc = dc;
+  dc.onopen = () => log(`DataChannel 已打开 (到父节点)`);
+  dc.onmessage = (e) => handleDcMessage(JSON.parse(e.data), targetParentId);
+
+  pc.onicecandidate = (e) => {
+    if (e.candidate) socket.emit('signal', { targetId: targetParentId, data: { type: 'candidate', candidate: e.candidate } });
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    connInfo.iceState = pc.iceConnectionState;
+    log(`ICE(父) ${targetParentId.substring(0,8)}: ${pc.iceConnectionState}`);
+    updateIceStatusUI();
+    if (pc.iceConnectionState === 'failed') {
+      log('ICE连接失败，尝试重启ICE...', 'warn');
+      pc.restartIce();
+    }
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      showReconnectOverlay(false);
+    }
+  };
+
+  pc.ontrack = (e) => {
+    log(`收到轨道: ${e.track.kind} from ${targetParentId.substring(0,8)}`);
+    if (!receivedStream) receivedStream = new MediaStream();
+    receivedStream.addTrack(e.track);
+    showRemoteVideo(targetParentId, receivedStream);
+    if (receivedStream.getVideoTracks().length > 0 && receivedStream.getAudioTracks().length > 0) {
+      socket.emit('peerReady');
+      log('已标记为可转发节点');
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  socket.emit('signal', { targetId: targetParentId, data: { type: 'offer', sdp: pc.localDescription } });
+  log(`发送 offer -> ${targetParentId.substring(0,8)}`);
+}
+
+// ============================================================
+// WebRTC: Handle signals
+// ============================================================
+async function handleSignal(fromId, data) {
+  if (data.type === 'offer') {
+    log(`收到 offer from ${fromId.substring(0,8)} (我是父节点)`);
+    const config = { iceServers: getIceServers(), iceTransportPolicy: getIcePolicy() };
+    const pc = new RTCPeerConnection(config);
+    const connInfo = { pc, role: 'child', dc: null, iceState: 'new' };
+    connections.set(fromId, connInfo);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) socket.emit('signal', { targetId: fromId, data: { type: 'candidate', candidate: e.candidate } });
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      connInfo.iceState = pc.iceConnectionState;
+      log(`ICE(子) ${fromId.substring(0,8)}: ${pc.iceConnectionState}`);
+      updateIceStatusUI();
+    };
+
+    // Accept DataChannel from child
+    pc.ondatachannel = (e) => {
+      connInfo.dc = e.channel;
+      e.channel.onmessage = (ev) => handleDcMessage(JSON.parse(ev.data), fromId);
+      e.channel.onopen = () => log(`DataChannel 已打开 (子节点 ${fromId.substring(0,8)})`);
+    };
+
+    const streamToSend = myRole === 'publisher' ? localStream : receivedStream;
+    if (streamToSend) {
+      streamToSend.getTracks().forEach(t => pc.addTrack(t, streamToSend));
+      log(`添加 ${streamToSend.getTracks().length} 轨道 -> ${fromId.substring(0,8)}`);
+    } else {
+      log(`无可发送流 -> ${fromId.substring(0,8)}`, 'warn');
+    }
+
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('signal', { targetId: fromId, data: { type: 'answer', sdp: pc.localDescription } });
+
+  } else if (data.type === 'answer') {
+    const conn = connections.get(fromId);
+    if (conn) await conn.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+
+  } else if (data.type === 'candidate') {
+    const conn = connections.get(fromId);
+    if (conn) await conn.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  }
+}
+
+// ============================================================
+// DataChannel messaging (tree-based chat)
+// ============================================================
+function handleDcMessage(msg, fromId) {
+  // DataChannel messages are reserved for future P2P-only features.
+  // Chat and reactions currently use Socket.io to avoid duplication.
+  // Forward any received DC messages down the tree if needed.
+  if (msg.type === 'chat') {
+    if (seenMsgIds.has(msg.id)) return;
+    markSeen(msg.id);
+    appendChatMessage(msg);
+    if (msg.direction === 'down') broadcastDc(msg, fromId);
+  } else if (msg.type === 'reaction') {
+    const rId = msg.id || (msg.from + '-' + msg.emoji + '-' + (msg.ts || 0));
+    if (seenMsgIds.has(rId)) return;
+    markSeen(rId);
+    showReactionFloat(msg.emoji);
+    if (msg.direction === 'down') broadcastDc(msg, fromId);
+  }
+}
+
+function sendDcToParent(msg) {
+  if (!parentId) return;
+  const conn = connections.get(parentId);
+  if (conn && conn.dc && conn.dc.readyState === 'open') {
+    conn.dc.send(JSON.stringify(msg));
+  }
+}
+
+function broadcastDc(msg, excludeId) {
+  for (const [pid, conn] of connections) {
+    if (conn.role === 'child' && pid !== excludeId && conn.dc && conn.dc.readyState === 'open') {
+      conn.dc.send(JSON.stringify(msg));
+    }
+  }
+}
+
+// ============================================================
+// Chat UI
+// ============================================================
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  if (!message || !socket) return;
+  input.value = '';
+
+  // Only send via socket.io — server broadcasts to all.
+  // DataChannel tree is used for forwarding server-originated messages (not for originating).
+  socket.emit('chatMessage', { message, nickname: myNickname });
+}
+
+function appendChatMessage(msg) {
+  const container = document.getElementById('chatMessages');
+  // Deduplicate by id
+  if (msg.id && container.querySelector(`[data-id="${msg.id}"]`)) return;
+
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+  if (msg.id) div.dataset.id = msg.id;
+  const time = new Date(msg.timestamp).toLocaleTimeString();
+  div.innerHTML = `<span class="nick">${escHtml(msg.nickname)}</span><span class="time">${time}</span><br>${escHtml(msg.message)}`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ============================================================
+// Reactions
+// ============================================================
+function sendReaction(emoji) {
+  if (!socket) return;
+  socket.emit('reaction', { emoji });
+  showReactionFloat(emoji);
+}
+
+function showReactionFloat(emoji) {
+  const container = document.getElementById('reactionFloat');
+  const el = document.createElement('div');
+  el.className = 'reaction-anim';
+  el.textContent = emoji;
+  el.style.left = Math.random() * 40 + 'px';
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
+}
+
+// Danmaku
+function showDanmaku(text) {
+  const container = document.getElementById('danmakuContainer');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'danmaku';
+  el.textContent = text;
+  el.style.top = Math.random() * 80 + '%';
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 6500);
+}
+
+// ============================================================
+// ICE Status UI
+// ============================================================
+function updateIceStatusUI() {
+  const container = document.getElementById('iceStatus');
+  if (!container) return;
+  container.innerHTML = '';
+  for (const [pid, conn] of connections) {
+    const state = conn.iceState || 'new';
+    let color = '#888';
+    if (state === 'connected' || state === 'completed') color = '#0f9';
+    else if (state === 'checking' || state === 'new') color = '#ff0';
+    else if (state === 'failed' || state === 'disconnected' || state === 'closed') color = '#f33';
+
+    const badge = document.createElement('div');
+    badge.className = 'ice-badge';
+    badge.style.background = color + '22';
+    badge.style.color = color;
+    badge.innerHTML = `<span class="dot" style="background:${color}"></span>${conn.role === 'parent' ? '↑' : '↓'}${pid.substring(0,6)} ${state}`;
+
+    if (state === 'failed') {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-sm btn-warn';
+      btn.textContent = '重连';
+      btn.style.marginLeft = '4px';
+      btn.onclick = () => { conn.pc.restartIce(); log(`手动重启ICE: ${pid.substring(0,8)}`); };
+      badge.appendChild(btn);
+    }
+    container.appendChild(badge);
+  }
+}
+
+// ============================================================
+// Room List
+// ============================================================
+function renderRoomList(list) {
+  const container = document.getElementById('roomList');
+  if (!list || list.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px">暂无直播房间</div>';
+    return;
+  }
+  container.innerHTML = '';
+  list.forEach(r => {
+    const card = document.createElement('div');
+    card.className = 'room-card';
+    card.innerHTML = `
+      <div class="room-title">${r.hasPassword ? '🔒 ' : ''}${escHtml(r.title)}</div>
+      <div class="room-meta">主播: ${escHtml(r.publisherName)} · 👥 ${r.viewerCount} · 🌳 深度${r.treeDepth}</div>
+    `;
+    card.onclick = () => {
+      document.getElementById('joinRoomInput').value = r.roomId;
+      // Auto-join or just fill in
+    };
+    container.appendChild(card);
+  });
+}
+
+// ============================================================
+// Video UI
+// ============================================================
+function showRemoteVideo(peerId, stream) {
+  const video = document.getElementById('remoteVideo');
+  if (video && video.srcObject !== stream) {
+    video.srcObject = stream;
+  }
+  const label = document.getElementById('remoteVideoLabel');
+  if (label) label.innerHTML = `连接自: <span style="color:var(--accent2)">${peerId.substring(0,8)}...</span>`;
+}
+
+function showReconnectOverlay(show) {
+  const el = document.getElementById('reconnectOverlay');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+
+// ============================================================
+// Topology Canvas Drawing
+// ============================================================
+function drawTopology() {
+  const canvas = document.getElementById('topoCanvas');
+  if (!canvas || !canvas.getContext) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+
+  // Size canvas
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 400 * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = '400px';
+  ctx.scale(dpr, dpr);
+
+  const W = rect.width;
+  const H = 400;
+  ctx.clearRect(0, 0, W, H);
+
+  const nodes = currentTopology;
+  if (!nodes || nodes.length === 0) {
+    ctx.fillStyle = '#555';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂无拓扑数据', W / 2, H / 2);
+    return;
+  }
+
+  // Build tree layout
+  const root = nodes.find(n => n.isPublisher);
+  if (!root) return;
+
+  const nodeMap = {};
+  nodes.forEach(n => { nodeMap[n.id] = { ...n, children: [], x: 0, y: 0 }; });
+  nodes.forEach(n => {
+    if (n.parentId && nodeMap[n.parentId]) nodeMap[n.parentId].children.push(n.id);
+  });
+
+  // BFS to assign positions
+  const levels = [];
+  const queue = [{ id: root.id, level: 0 }];
+  const visited = new Set();
+  while (queue.length > 0) {
+    const { id, level } = queue.shift();
+    if (visited.has(id)) continue;
+    visited.add(id);
+    if (!levels[level]) levels[level] = [];
+    levels[level].push(id);
+    const node = nodeMap[id];
+    if (node) node.children.forEach(cid => queue.push({ id: cid, level: level + 1 }));
+  }
+
+  const levelH = Math.min(80, (H - 60) / Math.max(levels.length, 1));
+  const nodeRadius = 20;
+
+  levels.forEach((ids, lvl) => {
+    const y = 40 + lvl * levelH;
+    const spacing = W / (ids.length + 1);
+    ids.forEach((id, i) => {
+      const node = nodeMap[id];
+      if (node) { node.x = spacing * (i + 1); node.y = y; }
+    });
+  });
+
+  // Draw edges
+  ctx.strokeStyle = '#334';
+  ctx.lineWidth = 2;
+  nodes.forEach(n => {
+    if (n.parentId && nodeMap[n.parentId] && nodeMap[n.id]) {
+      const parent = nodeMap[n.parentId];
+      const child = nodeMap[n.id];
+      ctx.beginPath();
+      ctx.moveTo(parent.x, parent.y + nodeRadius);
+      ctx.lineTo(child.x, child.y - nodeRadius);
+      ctx.stroke();
+
+      // Connection type label
+      const conn = connections.get(n.id) || connections.get(n.parentId);
+      if (conn) {
+        const mx = (parent.x + child.x) / 2;
+        const my = (parent.y + child.y) / 2;
+        ctx.fillStyle = '#555';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        const label = conn.iceState || '';
+        ctx.fillText(label, mx + 15, my);
+      }
+    }
+  });
+
+  // Draw nodes
+  nodes.forEach(n => {
+    const node = nodeMap[n.id];
+    if (!node) return;
+    let color = '#3498db'; // viewer
+    if (n.isPublisher) color = '#e94560';
+    else if (n.childCount > 0) color = '#27ae60';
+    if (!n.isReady && !n.isPublisher) color = '#f39c12';
+
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, nodeRadius, 0, Math.PI * 2);
+    ctx.fillStyle = color + '33';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Icon
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const icon = n.isPublisher ? '📡' : (n.childCount > 0 ? '🔁' : '👤');
+    ctx.fillText(icon, node.x, node.y);
+
+    // Label
+    ctx.fillStyle = '#aaa';
+    ctx.font = '10px sans-serif';
+    ctx.textBaseline = 'top';
+    const label = n.nickname || n.id.substring(0, 6);
+    const meTag = n.id === myPeerId ? ' (我)' : '';
+    ctx.fillText(label + meTag, node.x, node.y + nodeRadius + 4);
+  });
+
+  // Store for click detection
+  canvas._nodes = nodeMap;
+}
+
+// Click on canvas node for detail
+document.addEventListener('click', (e) => {
+  const canvas = document.getElementById('topoCanvas');
+  const detail = document.getElementById('nodeDetail');
+  if (!canvas || !canvas._nodes) { if (detail) detail.style.display = 'none'; return; }
+
+  const rect = canvas.getBoundingClientRect();
+  if (e.target !== canvas) { detail.style.display = 'none'; return; }
+
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  let found = null;
+  for (const [id, node] of Object.entries(canvas._nodes)) {
+    const dx = node.x - x, dy = node.y - y;
+    if (Math.sqrt(dx * dx + dy * dy) < 24) { found = node; break; }
+  }
+
+  if (!found) { detail.style.display = 'none'; return; }
+
+  detail.style.display = '';
+  detail.style.left = (e.clientX + 10) + 'px';
+  detail.style.top = (e.clientY + 10) + 'px';
+  document.getElementById('nodeDetailTitle').textContent = found.isPublisher ? '📡 主播节点' : '👤 观众节点';
+
+  const conn = connections.get(found.id);
+  const iceState = conn ? conn.iceState : 'N/A';
+
+  document.getElementById('nodeDetailBody').innerHTML = `
+    <div class="detail-row">Peer ID: <span>${found.id.substring(0,12)}...</span></div>
+    <div class="detail-row">昵称: <span>${escHtml(found.nickname || 'N/A')}</span></div>
+    <div class="detail-row">父节点: <span>${found.parentId ? found.parentId.substring(0,8) : '无 (根)'}</span></div>
+    <div class="detail-row">子节点数: <span>${found.childCount}</span></div>
+    <div class="detail-row">ICE状态: <span>${iceState}</span></div>
+    <div class="detail-row">就绪: <span>${found.isReady ? '✅' : '⏳'}</span></div>
+  `;
+});
+
+// ============================================================
+// Stats collection
+// ============================================================
+setInterval(async () => {
+  if (!socket || !myPeerId) return;
+  for (const [pid, conn] of connections) {
+    try {
+      const stats = await conn.pc.getStats();
+      let rtt = null, bytesReceived = 0, bytesSent = 0;
+      stats.forEach(report => {
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          rtt = report.currentRoundTripTime;
+        }
+        if (report.type === 'inbound-rtp') bytesReceived += report.bytesReceived || 0;
+        if (report.type === 'outbound-rtp') bytesSent += report.bytesSent || 0;
+      });
+    } catch (e) { /* ignore */ }
+  }
+}, 5000);
+
+// ============================================================
+// Cleanup
+// ============================================================
+function cleanup() {
+  connections.forEach(({ pc }) => pc.close());
+  connections.clear();
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  receivedStream = null;
+  if (socket) { socket.disconnect(); socket = null; }
+  myRole = null;
+  myPeerId = null;
+}
+
+// Resize handler for topology
+window.addEventListener('resize', () => { if (document.getElementById('tab-topology').classList.contains('active')) drawTopology(); });
+</script>
+</body>
+</html>
