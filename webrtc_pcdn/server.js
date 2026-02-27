@@ -1,10 +1,28 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const path = require('path');
 
 const app = express();
-const server = http.createServer(app);
+
+// Use HTTPS if cert files are provided via env vars or default paths
+const SSL_CERT = process.env.SSL_CERT || '';
+const SSL_KEY = process.env.SSL_KEY || '';
+
+let server;
+if (SSL_CERT && SSL_KEY && fs.existsSync(SSL_CERT) && fs.existsSync(SSL_KEY)) {
+  server = https.createServer({
+    cert: fs.readFileSync(SSL_CERT),
+    key: fs.readFileSync(SSL_KEY),
+  }, app);
+  console.log('[SSL] HTTPS enabled');
+} else {
+  server = http.createServer(app);
+  console.log('[SSL] No cert found, falling back to HTTP (getUserMedia will only work on localhost)');
+}
+
 const io = new Server(server, { cors: { origin: '*' }, serveClient: false });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -266,6 +284,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const proto = SSL_CERT && SSL_KEY ? 'https' : 'http';
 server.listen(PORT, () => {
-  console.log(`Signaling server running on http://localhost:${PORT}`);
+  console.log(`Signaling server running on ${proto}://0.0.0.0:${PORT}`);
 });
