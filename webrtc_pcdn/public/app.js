@@ -115,13 +115,23 @@ function initSocket() {
     var bc = connections.get(d.newPrimaryId);
     if (bc && bc.role === 'backup') {
       bc.role = 'primary'; primaryParentId = d.newPrimaryId; backupParentId = null;
-      if (bc.stream) { receivedStream = bc.stream; showRemoteVideo(d.newPrimaryId, receivedStream); }
-      showReconnectOverlay(false);
-      log('无缝切换完成');
+      if (bc.stream && bc.stream.getTracks().length > 0) {
+        receivedStream = bc.stream;
+        showRemoteVideo(d.newPrimaryId, receivedStream);
+        replaceTracksOnChildren(receivedStream);
+        showReconnectOverlay(false);
+        log('无缝切换完成');
+      } else {
+        // Backup connection exists but has no stream — reconnect as primary
+        log('备用连接无流数据，重新建立主连接','warn');
+        bc.pc.close(); connections.delete(d.newPrimaryId);
+        await connectToParent(d.newPrimaryId, 'primary');
+      }
       socket.emit('requestBackup', function(res) {
         if (res && res.backupParentId) { backupParentId = res.backupParentId; connectToParent(backupParentId, 'backup'); }
       });
     } else {
+      // No backup connection object at all — full reconnect
       primaryParentId = d.newPrimaryId;
       await connectToParent(d.newPrimaryId, 'primary');
     }
@@ -251,6 +261,23 @@ async function joinAsViewer() {
 function leaveRoom() { cleanup(); location.reload(); }
 
 // ============================================================
+// Replace tracks on all child connections (after failover)
+// ============================================================
+function replaceTracksOnChildren(newStream) {
+  if (!newStream) return;
+  connections.forEach(function(conn, pid) {
+    if (conn.role !== 'child') return;
+    var senders = conn.pc.getSenders();
+    newStream.getTracks().forEach(function(track) {
+      var sender = senders.find(function(s) { return s.track && s.track.kind === track.kind; });
+      if (sender) {
+        sender.replaceTrack(track).catch(function(e) { log('替换子节点轨道失败: '+e.message,'warn'); });
+      }
+    });
+  });
+}
+
+// ============================================================
 // WebRTC: Connect to parent (primary or backup)
 // ============================================================
 async function connectToParent(targetId, role) {
@@ -282,6 +309,8 @@ async function connectToParent(targetId, role) {
     }
     if (role==='primary') {
       receivedStream = ci.stream; showRemoteVideo(targetId, receivedStream);
+      // Replace tracks on child connections so downstream viewers get the new stream
+      replaceTracksOnChildren(receivedStream);
       if (ci.stream.getVideoTracks().length>0 && ci.stream.getAudioTracks().length>0) { socket.emit('peerReady'); log('已标记为可转发节点'); }
     }
   };
@@ -650,9 +679,15 @@ async function triggerStreamFailover() {
       primaryParentId = newPrimary;
       backupParentId = null;
 
-      if (backupConn.stream) {
+      if (backupConn.stream && backupConn.stream.getTracks().length > 0) {
         receivedStream = backupConn.stream;
         showRemoteVideo(newPrimary, receivedStream);
+        replaceTracksOnChildren(receivedStream);
+      } else {
+        // Backup ICE is green but no media — do full reconnect to this node
+        log('备用连接无流数据，重新建立连接','warn');
+        backupConn.pc.close(); connections.delete(newPrimary);
+        await connectToParent(newPrimary, 'primary');
       }
 
       // Notify server of the promotion
