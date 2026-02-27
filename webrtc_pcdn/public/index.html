@@ -289,6 +289,8 @@ video { width: 100%; border-radius: 6px; background: #000; }
         </div>
         <div class="screen-share-banner" id="screenShareBanner">🖥️ 正在共享屏幕 <button class="btn btn-sm btn-danger" onclick="stopScreenShare()">停止共享</button></div>
         <div class="status" id="publisherStatus"></div>
+        <h3>📡 子节点连接状态</h3>
+        <div class="ice-status" id="hostIceStatus"><span style="color:var(--muted);font-size:12px">暂无子节点</span></div>
         <video id="localVideo" autoplay muted playsinline></video>
       </div>
       <div id="viewerArea" style="display:none">

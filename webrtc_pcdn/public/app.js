@@ -19,6 +19,9 @@ var serverIceConfig = null;
 var connections = new Map();
 var receivedStream = null;
 
+// Track pending outgoing connections to prevent duplicate offers
+var pendingConnects = new Set(); // stores "peerId:role" keys
+
 var seenMsgIds = new Set();
 function markSeen(id) { seenMsgIds.add(id); if (seenMsgIds.size > 200) seenMsgIds.delete(seenMsgIds.values().next().value); }
 
@@ -112,7 +115,8 @@ function initSocket() {
     if (el) el.innerHTML = el.innerHTML.replace(/<span style="color:#f90">.*?<\/span>/, '');
   });
   socket.on('reassign', async function(d) {
-    log('父节点变更: '+(d.newParentId||'无')+' 原因:'+(d.reason||''),'warn');
+    log('收到reassign: newParent='+(d.newParentId||'无')+' backup='+(d.backupParentId||'无')+' 原因:'+(d.reason||''),'warn');
+    log('reassign前状态: primaryParentId='+(primaryParentId||'无')+' backupParentId='+(backupParentId||'无')+' conns='+connections.size);
     showReconnectOverlay(true);
     resetHealthState();
     // Close old primary
@@ -126,9 +130,10 @@ function initSocket() {
     if (d.backupParentId) { backupParentId = d.backupParentId; await connectToParent(backupParentId, 'backup'); }
   });
   socket.on('promoteBackupToPrimary', async function(d) {
-    log('备用连接提升为主连接: '+d.newPrimaryId.substring(0,8));
-    resetHealthState();
+    log('收到promoteBackupToPrimary: newPrimaryId='+d.newPrimaryId.substring(0,8)+' 当前primary='+(primaryParentId||'无')+' 当前backup='+(backupParentId||'无'));
     var bc = getConn(d.newPrimaryId, 'backup');
+    log('查找备用连接: key='+connKey(d.newPrimaryId,'backup')+' found='+(!!bc)+' bcRole='+(bc?bc.role:'N/A')+' bcIce='+(bc?bc.iceState:'N/A')+' bcStream='+(bc&&bc.stream?bc.stream.getTracks().length+'tracks':'null'));
+    resetHealthState();
     if (bc && bc.role === 'backup') {
       // Re-key: delete backup key, set as primary key
       deleteConn(d.newPrimaryId, 'backup');
@@ -147,7 +152,16 @@ function initSocket() {
         await connectToParent(d.newPrimaryId, 'primary');
       }
       socket.emit('requestBackup', function(res) {
-        if (res && res.backupParentId) { backupParentId = res.backupParentId; connectToParent(backupParentId, 'backup'); }
+        log('requestBackup回调: backupParentId='+(res&&res.backupParentId?res.backupParentId.substring(0,8):'无')+' 当前backupParentId='+(backupParentId||'无'));
+        if (res && res.backupParentId) {
+          // Only connect if backupReassign hasn't already set this up
+          if (!backupParentId || backupParentId !== res.backupParentId) {
+            backupParentId = res.backupParentId;
+            connectToParent(backupParentId, 'backup');
+          } else {
+            log('requestBackup返回与当前备用相同: ' + res.backupParentId.substring(0,8), 'warn');
+          }
+        }
       });
     } else {
       primaryParentId = d.newPrimaryId;
@@ -155,7 +169,17 @@ function initSocket() {
     }
   });
   socket.on('backupReassign', async function(d) {
-    if (backupParentId) { closeConnByRole(backupParentId, 'backup'); }
+    log('收到backupReassign: newBackupId='+(d.newBackupId?d.newBackupId.substring(0,8):'无')+' 当前backupParentId='+(backupParentId||'无'));
+    // If we already have a pending or active backup to this same peer, skip
+    if (d.newBackupId && d.newBackupId === backupParentId) {
+      var existingBackup = getConn(d.newBackupId, 'backup');
+      var isPending = pendingConnects.has(connKey(d.newBackupId, 'backup'));
+      if (existingBackup || isPending) {
+        log('跳过backupReassign(已有连接='+!!existingBackup+' 待连接='+isPending+'): ' + d.newBackupId.substring(0,8), 'warn');
+        return;
+      }
+    }
+    if (backupParentId && backupParentId !== d.newBackupId) { closeConnByRole(backupParentId, 'backup'); }
     backupParentId = d.newBackupId;
     if (d.newBackupId) { log('新备用节点: '+d.newBackupId.substring(0,8)); await connectToParent(d.newBackupId, 'backup'); }
   });
@@ -168,6 +192,7 @@ function initSocket() {
 function closeConnByRole(peerId, role) {
   var ci = getConn(peerId, role);
   if (ci) { ci.pc.close(); deleteConn(peerId, role); }
+  pendingConnects.delete(connKey(peerId, role));
 }
 
 // ============================================================
@@ -293,10 +318,27 @@ function replaceTracksOnChildren(newStream) {
 // WebRTC: Connect to parent (primary or backup)
 // ============================================================
 async function connectToParent(targetId, role) {
-  // Close existing connection of same role to this peer if any
-  var existing = getConn(targetId, role);
-  if (existing) { existing.pc.close(); deleteConn(targetId, role); }
+  var key = connKey(targetId, role);
 
+  // If we already have a pending connect for this exact peer+role, skip
+  if (pendingConnects.has(key)) {
+    log('跳过重复连接请求: ' + targetId.substring(0, 8) + ' role=' + role, 'warn');
+    return;
+  }
+
+  // If existing connection is already connected/completed, skip
+  var existing = getConn(targetId, role);
+  if (existing) {
+    var existingState = existing.pc.iceConnectionState;
+    if (existingState === 'connected' || existingState === 'completed') {
+      log('跳过连接(已连接): ' + targetId.substring(0, 8) + ' role=' + role, 'warn');
+      return;
+    }
+    existing.pc.close();
+    deleteConn(targetId, role);
+  }
+
+  pendingConnects.add(key);
   var config = getIceConfig();
   var pc = new RTCPeerConnection(config);
   var ci = { pc:pc, role:role, dc:null, iceState:'new', stats:{}, stream:null, peerId:targetId };
@@ -310,6 +352,10 @@ async function connectToParent(targetId, role) {
     ci.iceState = pc.iceConnectionState;
     log('ICE('+role+') '+targetId.substring(0,8)+': '+pc.iceConnectionState);
     updateIceStatusUI();
+    // Clear pending flag once connection settles
+    if (pc.iceConnectionState==='connected'||pc.iceConnectionState==='completed'||pc.iceConnectionState==='failed'||pc.iceConnectionState==='closed') {
+      pendingConnects.delete(key);
+    }
     if (pc.iceConnectionState==='failed'){log('ICE失败，重启...','warn');pc.restartIce();}
     if (role==='primary'&&(pc.iceConnectionState==='connected'||pc.iceConnectionState==='completed')) showReconnectOverlay(false);
   };
@@ -327,7 +373,7 @@ async function connectToParent(targetId, role) {
   var offer = await pc.createOffer(); await pc.setLocalDescription(offer);
   // Include connRole so the remote side can tag the answer correctly
   socket.emit('signal',{targetId:targetId,data:{type:'offer',sdp:pc.localDescription,connRole:role}});
-  log('发送 offer('+role+') -> '+targetId.substring(0,8));
+  log('发送 offer('+role+') -> '+targetId.substring(0,8)+' [key='+key+', sigState='+pc.signalingState+', pending='+pendingConnects.size+', conns='+connections.size+']');
 }
 
 // ============================================================
@@ -340,11 +386,14 @@ async function handleSignal(fromId, data) {
     // From our perspective, they are a 'child'. Use their connRole to disambiguate.
     var childTag = data.connRole || 'primary'; // what role the requester plays
     var ourKey = 'child-' + childTag; // e.g. "child-primary" or "child-backup"
-    log('收到 offer from '+fromId.substring(0,8)+' (我是父节点, 对方角色:'+childTag+')');
+    log('收到 offer from '+fromId.substring(0,8)+' (我是父节点, 对方角色:'+childTag+', key='+connKey(fromId,ourKey)+')');
 
     // Close any existing connection with same key
     var existingChild = getConn(fromId, ourKey);
-    if (existingChild) { existingChild.pc.close(); deleteConn(fromId, ourKey); }
+    if (existingChild) {
+      log('关闭旧子连接: '+connKey(fromId,ourKey)+' iceState='+existingChild.iceState, 'warn');
+      existingChild.pc.close(); deleteConn(fromId, ourKey);
+    }
 
     var config = getIceConfig(); var pc = new RTCPeerConnection(config);
     var ci = {pc:pc, role:'child', dc:null, iceState:'new', stats:{}, peerId:fromId, childTag:childTag};
@@ -357,13 +406,27 @@ async function handleSignal(fromId, data) {
     else { log('无可发送流 -> '+fromId.substring(0,8),'warn'); }
     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
     var answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+    log('发送 answer -> '+fromId.substring(0,8)+' connRole='+childTag+' [sigState='+pc.signalingState+']');
     socket.emit('signal',{targetId:fromId,data:{type:'answer',sdp:pc.localDescription,connRole:childTag}});
   } else if (data.type==='answer') {
     // Answer for our outgoing connection — connRole tells us which of our connections this is for
     var role = data.connRole || 'primary';
     var c = getConn(fromId, role);
-    if (c) { await c.pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
-    else { log('收到answer但找不到连接: '+fromId.substring(0,8)+' role='+role,'warn'); }
+    log('收到 answer from '+fromId.substring(0,8)+' connRole='+role+' 查找key='+connKey(fromId,role)+' found='+(!!c)+' sigState='+(c?c.pc.signalingState:'N/A'));
+    if (c) {
+      // Guard: only set remote answer if we're actually waiting for one
+      if (c.pc.signalingState === 'have-local-offer') {
+        await c.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        log('设置answer成功: ' + fromId.substring(0,8) + ' role=' + role + ' [sigState='+c.pc.signalingState+']');
+      } else {
+        log('跳过answer(状态=' + c.pc.signalingState + '): ' + fromId.substring(0,8) + ' role=' + role, 'warn');
+      }
+    } else {
+      // Debug: dump all connection keys to help diagnose
+      var allKeys = [];
+      connections.forEach(function(ci, key) { allKeys.push(key+'('+ci.pc.signalingState+')'); });
+      log('收到answer但找不到连接: '+fromId.substring(0,8)+' role='+role+' 所有连接=['+allKeys.join(', ')+']','warn');
+    }
   } else if (data.type==='candidate') {
     // ICE candidate — find the right connection
     var cRole = data.connRole || 'primary';
@@ -413,17 +476,37 @@ function showReactionFloat(emoji) {
 // ICE Status UI
 // ============================================================
 function updateIceStatusUI() {
-  var c=document.getElementById('iceStatus'); if(!c)return; c.innerHTML='';
-  connections.forEach(function(conn, key) {
-    var st=conn.iceState||'new',color='#888';
-    if(st==='connected'||st==='completed')color='#0f9'; else if(st==='checking'||st==='new')color='#ff0'; else if(st==='failed'||st==='disconnected'||st==='closed')color='#f33';
-    var rl=conn.role==='primary'?'↑主':conn.role==='backup'?'↑备':'↓子';
-    var pid = conn.peerId || key.split(':')[0];
-    var b=document.createElement('div'); b.className='ice-badge'; b.style.background=color+'22'; b.style.color=color;
-    b.innerHTML='<span class="dot" style="background:'+color+'"></span>'+rl+' '+pid.substring(0,6)+' '+st;
-    if(st==='failed'){var btn=document.createElement('button');btn.className='btn btn-sm btn-warn';btn.textContent='重连';btn.style.marginLeft='4px';btn.onclick=(function(x){return function(){x.pc.restartIce();};})(conn);b.appendChild(btn);}
-    c.appendChild(b);
-  });
+  // Viewer ICE status (parent connections)
+  var c=document.getElementById('iceStatus'); if(c) {
+    c.innerHTML='';
+    connections.forEach(function(conn, key) {
+      if (conn.role === 'child') return; // skip child conns in viewer panel
+      var st=conn.iceState||'new',color='#888';
+      if(st==='connected'||st==='completed')color='#0f9'; else if(st==='checking'||st==='new')color='#ff0'; else if(st==='failed'||st==='disconnected'||st==='closed')color='#f33';
+      var rl=conn.role==='primary'?'↑主':conn.role==='backup'?'↑备':'↓子';
+      var pid = conn.peerId || key.split(':')[0];
+      var b=document.createElement('div'); b.className='ice-badge'; b.style.background=color+'22'; b.style.color=color;
+      b.innerHTML='<span class="dot" style="background:'+color+'"></span>'+rl+' '+pid.substring(0,6)+' '+st;
+      if(st==='failed'){var btn=document.createElement('button');btn.className='btn btn-sm btn-warn';btn.textContent='重连';btn.style.marginLeft='4px';btn.onclick=(function(x){return function(){x.pc.restartIce();};})(conn);b.appendChild(btn);}
+      c.appendChild(b);
+    });
+  }
+
+  // Host (publisher) child connection status
+  var hc=document.getElementById('hostIceStatus'); if(hc) {
+    var childCount = 0;
+    var html = '';
+    connections.forEach(function(conn, key) {
+      if (conn.role !== 'child') return;
+      childCount++;
+      var st=conn.iceState||'new',color='#888';
+      if(st==='connected'||st==='completed')color='#0f9'; else if(st==='checking'||st==='new')color='#ff0'; else if(st==='failed'||st==='disconnected'||st==='closed')color='#f33';
+      var pid = conn.peerId || key.split(':')[0];
+      var tag = conn.childTag ? '('+conn.childTag+')' : '';
+      html += '<div class="ice-badge" style="background:'+color+'22;color:'+color+'"><span class="dot" style="background:'+color+'"></span>↓子 '+pid.substring(0,6)+' '+tag+' '+st+'</div>';
+    });
+    hc.innerHTML = childCount > 0 ? html : '<span style="color:var(--muted);font-size:12px">暂无子节点</span>';
+  }
 }
 
 // ============================================================
@@ -550,10 +633,12 @@ async function checkStreamHealth() {
 async function triggerStreamFailover() {
   if(streamHealthState.failoverInProgress)return;
   streamHealthState.failoverInProgress=true;
+  log('触发故障转移: primaryParentId='+(primaryParentId||'无')+' backupParentId='+(backupParentId||'无'),'error');
   showReconnectOverlay(true);
   // Strategy 1: promote backup
   if(backupParentId){
     var backupConn=getConn(backupParentId,'backup');
+    log('故障转移检查备用: backupConn='+(!!backupConn)+' iceState='+(backupConn?backupConn.pc.iceConnectionState:'N/A'));
     if(backupConn&&backupConn.pc&&(backupConn.pc.iceConnectionState==='connected'||backupConn.pc.iceConnectionState==='completed')){
       log('故障转移: 提升备用连接 '+backupParentId.substring(0,8)+' 为主连接');
       var oldPrimary=primaryParentId;
@@ -572,7 +657,11 @@ async function triggerStreamFailover() {
         await connectToParent(newPrimary,'primary');
       }
       socket.emit('promoteBackup',{oldPrimaryId:oldPrimary,newPrimaryId:newPrimary},function(res){
-        if(res&&res.newBackupId){backupParentId=res.newBackupId;connectToParent(backupParentId,'backup');}
+        if(res&&res.newBackupId){
+          if (!backupParentId || backupParentId !== res.newBackupId) {
+            backupParentId=res.newBackupId;connectToParent(backupParentId,'backup');
+          }
+        }
       });
       showReconnectOverlay(false); resetHealthState(); log('故障转移完成 (备用提升)'); return;
     }
@@ -590,6 +679,16 @@ async function triggerStreamFailover() {
 // ============================================================
 setInterval(function() {
   if(!socket||!myPeerId)return;
+
+  // Periodic connection state dump (every cycle, but only to console for debugging)
+  var connSummary = [];
+  connections.forEach(function(conn, key) {
+    connSummary.push(key + '=' + conn.iceState + '/' + conn.pc.signalingState);
+  });
+  if (connSummary.length > 0) {
+    console.log('[debug] 连接状态: role='+myRole+' primary='+(primaryParentId?primaryParentId.substring(0,8):'无')+' backup='+(backupParentId?backupParentId.substring(0,8):'无')+' pending=['+Array.from(pendingConnects).join(',')+'] conns=['+connSummary.join(', ')+']');
+  }
+
   connections.forEach(function(conn){
     if(!conn.pc||conn.pc.connectionState==='closed')return;
     conn.pc.getStats().then(function(stats){
@@ -613,6 +712,7 @@ setInterval(function() {
 function cleanup() {
   connections.forEach(function(conn){conn.pc.close();});
   connections.clear();
+  pendingConnects.clear();
   if(localStream){localStream.getTracks().forEach(function(t){t.stop();});localStream=null;}
   receivedStream=null; primaryParentId=null; backupParentId=null;
   if(socket){socket.disconnect();socket=null;}
