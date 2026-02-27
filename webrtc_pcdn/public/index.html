@@ -145,6 +145,69 @@ video { width: 100%; border-radius: 6px; background: #000; }
 .node-detail h4 { color: var(--accent); margin-bottom: 8px; font-size: 14px; }
 .node-detail .detail-row { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .node-detail .detail-row span { color: var(--text); }
+
+/* ========== Mobile Responsive ========== */
+@media (max-width: 768px) {
+  .header h1 { font-size: 17px; }
+  .header p { font-size: 11px; }
+  .header { padding: 10px; }
+
+  .tabs { gap: 0; overflow-x: auto; justify-content: flex-start; -webkit-overflow-scrolling: touch; }
+  .tab { padding: 10px 14px; font-size: 13px; white-space: nowrap; flex-shrink: 0; }
+
+  .stats-bar { gap: 10px; padding: 8px 10px; flex-wrap: wrap; }
+  .stat-item { font-size: 11px; }
+
+  .container { flex-direction: column; padding: 8px; gap: 8px; }
+  .container.col { padding: 8px; gap: 8px; }
+
+  .panel { padding: 12px; border-radius: 8px; }
+  .panel h2 { font-size: 14px; margin-bottom: 8px; }
+
+  .form-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .form-row label { min-width: unset; font-size: 11px; }
+  .form-row input, .form-row select { font-size: 14px; padding: 10px 12px; }
+
+  .btn { padding: 10px 16px; font-size: 14px; width: 100%; }
+  .btn-sm { padding: 8px 12px; font-size: 12px; width: auto; }
+
+  .controls { gap: 6px; }
+  .controls select { width: 80px !important; font-size: 12px; }
+
+  #localVideo { max-width: 100%; }
+  #remoteVideo { max-width: 100% !important; }
+
+  .chat-panel { height: 300px; }
+  .chat-messages { font-size: 12px; }
+  .chat-input-row input { font-size: 14px; padding: 10px; }
+  .emoji-bar { flex-wrap: wrap; }
+  .emoji-btn { padding: 6px 10px; font-size: 18px; }
+
+  .room-list { grid-template-columns: 1fr; }
+  .room-card { padding: 12px; }
+
+  .ice-status { gap: 4px; }
+  .ice-badge { font-size: 10px; padding: 3px 8px; }
+
+  #topoCanvas { height: 280px; }
+  .topo-legend { flex-wrap: wrap; gap: 8px; font-size: 11px; }
+
+  .node-detail { min-width: 200px; max-width: 80vw; }
+
+  .log-panel { max-height: 400px; }
+  #logArea { font-size: 10px; }
+
+  .collapsible-header { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .header h1 { font-size: 15px; }
+  .tab { padding: 8px 10px; font-size: 12px; }
+  .panel { padding: 10px; }
+  .controls { flex-direction: column; align-items: stretch; }
+  .controls select { width: 100% !important; }
+  .controls .btn-sm { width: 100%; }
+}
 </style>
 
 <!-- Stats Bar -->

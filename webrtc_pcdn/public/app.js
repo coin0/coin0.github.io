@@ -169,33 +169,51 @@ function getMediaConstraints() {
 // ============================================================
 // Screen Share
 // ============================================================
+var savedCameraTrack = null; // keep camera track alive during screen share
+
 async function toggleScreenShare() {
   if (isScreenSharing) { stopScreenShare(); return; }
   try {
     var ss = await navigator.mediaDevices.getDisplayMedia({video:{cursor:'always'},audio:false});
     var st = ss.getVideoTracks()[0];
+    // Save camera track before replacing (don't stop it)
+    savedCameraTrack = localStream.getVideoTracks()[0];
+    // Replace on child connections
     for (var [pid,conn] of connections) { if(conn.role==='child'){var s=conn.pc.getSenders().find(function(x){return x.track&&x.track.kind==='video';}); if(s) await s.replaceTrack(st);} }
-    var old = localStream.getVideoTracks()[0]; localStream.removeTrack(old); localStream.addTrack(st);
+    // Replace in localStream for preview (don't stop camera track)
+    localStream.removeTrack(savedCameraTrack);
+    localStream.addTrack(st);
+    document.getElementById('localVideo').srcObject = null;
     document.getElementById('localVideo').srcObject = localStream;
     st.onended = function(){stopScreenShare();}; isScreenSharing = true;
     document.getElementById('screenShareBanner').style.display = '';
-    document.getElementById('btnScreenShare').textContent = '📷 恢复摄像头';
+    document.getElementById('btnScreenShare').textContent = '� 恢复摄像头';
     log('已开始屏幕共享');
   } catch(e) { log('屏幕共享失败: '+e.message,'error'); }
 }
 async function stopScreenShare() {
-  if (!isScreenSharing||!cameraStream) return;
-  var ct = cameraStream.getVideoTracks()[0];
-  if (!ct) { try { var nc=await navigator.mediaDevices.getUserMedia({video:getMediaConstraints().video}); await doReplaceVideoTrack(nc.getVideoTracks()[0]); } catch(e){log('恢复摄像头失败: '+e.message,'error');} }
-  else { await doReplaceVideoTrack(ct); }
+  if (!isScreenSharing) return;
+  // Stop the screen track
+  var screenTrack = localStream.getVideoTracks()[0];
+  if (screenTrack) { screenTrack.stop(); localStream.removeTrack(screenTrack); }
+  // Restore saved camera track, or re-acquire if dead
+  var camTrack = savedCameraTrack;
+  if (!camTrack || camTrack.readyState === 'ended') {
+    try {
+      var nc = await navigator.mediaDevices.getUserMedia({video:getMediaConstraints().video});
+      camTrack = nc.getVideoTracks()[0];
+    } catch(e) { log('恢复摄像头失败: '+e.message,'error'); isScreenSharing = false; return; }
+  }
+  localStream.addTrack(camTrack);
+  document.getElementById('localVideo').srcObject = null;
+  document.getElementById('localVideo').srcObject = localStream;
+  // Replace on child connections
+  for (var [pid,conn] of connections) { if(conn.role==='child'){var s=conn.pc.getSenders().find(function(x){return x.track&&x.track.kind==='video';}); if(s) await s.replaceTrack(camTrack);} }
+  savedCameraTrack = null;
   isScreenSharing = false;
   document.getElementById('screenShareBanner').style.display = 'none';
-  document.getElementById('btnScreenShare').textContent = '🖥️ 共享屏幕'; log('已停止屏幕共享');
-}
-async function doReplaceVideoTrack(nt) {
-  var old = localStream.getVideoTracks()[0]; if(old&&old!==nt) old.stop(); localStream.removeTrack(old); localStream.addTrack(nt);
-  document.getElementById('localVideo').srcObject = localStream;
-  for (var [pid,conn] of connections) { if(conn.role==='child'){var s=conn.pc.getSenders().find(function(x){return x.track&&x.track.kind==='video';}); if(s) await s.replaceTrack(nt);} }
+  document.getElementById('btnScreenShare').textContent = '🖥️ 共享屏幕';
+  log('已停止屏幕共享');
 }
 async function changeResolution() {
   if (myRole!=='publisher'||!localStream) return;
