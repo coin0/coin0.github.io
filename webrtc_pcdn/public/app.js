@@ -13,6 +13,8 @@ var backupParentId = null;
 var isScreenSharing = false;
 var currentTopology = { nodes: [], publisherOffline: false };
 var serverIceConfig = null;
+var currentRoomId = null;    // track room for auto-rejoin
+var currentRoomPwd = null;   // track password for auto-rejoin
 
 // connections keyed by "peerId:role" to support multiple connections to same peer
 // e.g. "abc123:primary", "abc123:child", "abc123:backup"
@@ -84,7 +86,12 @@ function switchTab(name) {
 }
 function toggleCollapsible(el) { el.classList.toggle('open'); el.nextElementSibling.classList.toggle('open'); }
 function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function showReconnectOverlay(show) { var el = document.getElementById('reconnectOverlay'); if (el) el.style.display = show ? 'flex' : 'none'; }
+function showReconnectOverlay(show) {
+  var el = document.getElementById('reconnectOverlay');
+  if (el) el.style.display = show ? 'flex' : 'none';
+  var el2 = document.getElementById('pubReconnectOverlay');
+  if (el2) el2.style.display = show ? 'flex' : 'none';
+}
 
 // ============================================================
 // Socket
@@ -92,7 +99,15 @@ function showReconnectOverlay(show) { var el = document.getElementById('reconnec
 function initSocket() {
   if (socket) return;
   socket = io();
-  socket.on('connect', function() { log('已连接信令服务器 id=' + socket.id); });
+  socket.on('connect', function() {
+    log('已连接信令服务器 id=' + socket.id);
+    // If we were already in a room, this is a reconnect (e.g. wifi→cellular)
+    // Need to rejoin because server lost our old socket state
+    if (myRole && currentRoomId) {
+      log('检测到信令重连，自动重新加入房间 room='+currentRoomId+' role='+myRole, 'warn');
+      autoRejoin();
+    }
+  });
   socket.on('signal', async function(d) { try { await handleSignal(d.fromId, d.data); } catch(e) { log('信令错误: '+e.message,'error'); } });
   socket.on('topologyUpdate', function(data) { currentTopology = data; drawTopology(); updateIceStatusUI(); });
   socket.on('roomList', function(list) { renderRoomList(list); });
@@ -214,6 +229,76 @@ function closeConnByRole(peerId, role) {
 }
 
 // ============================================================
+// Auto-rejoin after socket reconnect (e.g. network switch)
+// ============================================================
+function closeAllPeerConnections() {
+  connections.forEach(function(conn) { try { conn.pc.close(); } catch(e){} });
+  connections.clear();
+  pendingConnects.clear();
+  receivedStream = null;
+  primaryParentId = null;
+  backupParentId = null;
+  resetHealthState();
+}
+
+function autoRejoin() {
+  var savedRole = myRole;
+  var savedRoom = currentRoomId;
+  var savedPwd = currentRoomPwd;
+  var savedNick = myNickname;
+
+  // Tear down all old WebRTC connections (they're dead anyway)
+  closeAllPeerConnections();
+  showReconnectOverlay(true);
+
+  if (savedRole === 'publisher') {
+    // Publisher rejoin — use createRoom which handles reconnect via grace period
+    socket.emit('createRoom', {
+      roomId: savedRoom,
+      title: document.getElementById('roomTitle').value.trim(),
+      password: savedPwd,
+      nickname: savedNick
+    }, function(res) {
+      if (res.error) {
+        log('主播重连失败: ' + res.error, 'error');
+        showReconnectOverlay(false);
+        return;
+      }
+      myPeerId = res.peerId;
+      myRole = 'publisher';
+      if (res.iceConfig) serverIceConfig = res.iceConfig;
+      log('主播重连成功 room=' + savedRoom + (res.reconnected ? ' (恢复)' : ' (新建)'));
+      document.getElementById('publisherStatus').innerHTML = '房间: <span>' + savedRoom + '</span> | <span>' + savedNick + '</span>';
+      showReconnectOverlay(false);
+      updateIceStatusUI();
+    });
+  } else if (savedRole === 'viewer') {
+    // Viewer rejoin
+    socket.emit('joinRoom', {
+      roomId: savedRoom,
+      password: savedPwd,
+      nickname: savedNick
+    }, async function(res) {
+      if (res.error) {
+        log('观众重连失败: ' + res.error, 'error');
+        showReconnectOverlay(false);
+        return;
+      }
+      myPeerId = res.peerId;
+      myRole = 'viewer';
+      primaryParentId = res.parentId;
+      backupParentId = res.backupParentId || null;
+      if (res.iceConfig) serverIceConfig = res.iceConfig;
+      log('观众重连成功 room=' + savedRoom + ' 主:' + res.parentId.substring(0, 8) + (backupParentId ? ' 备:' + backupParentId.substring(0, 8) : ''));
+      document.getElementById('viewerStatus').innerHTML = '<span>' + savedNick + '</span> | 主: <span>' + res.parentId.substring(0, 8) + '</span>' + (backupParentId ? ' | 备: <span>' + backupParentId.substring(0, 8) + '</span>' : '');
+      await connectToParent(primaryParentId, 'primary');
+      if (backupParentId) await connectToParent(backupParentId, 'backup');
+      showReconnectOverlay(false);
+    });
+  }
+}
+
+// ============================================================
 // Publisher
 // ============================================================
 async function startPublish() {
@@ -231,6 +316,8 @@ async function startPublish() {
   socket.emit('createRoom', { roomId: roomId, title: document.getElementById('roomTitle').value.trim(), password: document.getElementById('roomPassword').value, nickname: myNickname }, function(res) {
     if (res.error) return log('创建房间失败: '+res.error,'error');
     myPeerId = res.peerId; myRole = 'publisher';
+    currentRoomId = roomId;
+    currentRoomPwd = document.getElementById('roomPassword').value;
     if (res.iceConfig) serverIceConfig = res.iceConfig;
     log('房间 '+roomId+' 创建成功'+(res.reconnected?' (重连)':''));
     document.getElementById('publisherArea').style.display = '';
@@ -303,6 +390,8 @@ async function joinAsViewer() {
   socket.emit('joinRoom', { roomId:roomId, password:document.getElementById('joinPassword').value, nickname:myNickname }, async function(res) {
     if (res.error) return log('加入失败: '+res.error,'error');
     myPeerId = res.peerId; myRole = 'viewer'; primaryParentId = res.parentId; backupParentId = res.backupParentId||null;
+    currentRoomId = roomId;
+    currentRoomPwd = document.getElementById('joinPassword').value;
     if (res.iceConfig) serverIceConfig = res.iceConfig;
     log('已加入 '+roomId+' 主:'+res.parentId.substring(0,8)+(backupParentId?' 备:'+backupParentId.substring(0,8):''));
     document.getElementById('viewerArea').style.display = '';
@@ -762,6 +851,7 @@ function cleanup() {
   pendingConnects.clear();
   if(localStream){localStream.getTracks().forEach(function(t){t.stop();});localStream=null;}
   receivedStream=null; primaryParentId=null; backupParentId=null;
+  currentRoomId=null; currentRoomPwd=null;
   if(socket){socket.disconnect();socket=null;}
   myRole=null; myPeerId=null;
 }

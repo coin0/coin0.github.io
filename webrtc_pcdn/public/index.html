@@ -291,7 +291,10 @@ video { width: 100%; border-radius: 6px; background: #000; }
         <div class="status" id="publisherStatus"></div>
         <h3>📡 子节点连接状态</h3>
         <div class="ice-status" id="hostIceStatus"><span style="color:var(--muted);font-size:12px">暂无子节点</span></div>
-        <video id="localVideo" autoplay muted playsinline></video>
+        <div style="position:relative">
+          <video id="localVideo" autoplay muted playsinline></video>
+          <div class="reconnecting-overlay" id="pubReconnectOverlay">🔄 正在重新连接...</div>
+        </div>
       </div>
       <div id="viewerArea" style="display:none">
         <h2>👀 观看中</h2>
