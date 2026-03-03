@@ -469,6 +469,8 @@ async function connectToParent(targetId, role) {
     ci.iceState = pc.iceConnectionState;
     log('ICE('+role+') '+targetId.substring(0,8)+': '+pc.iceConnectionState);
     updateIceStatusUI();
+    if (pc.iceConnectionState === 'disconnected') { ci.disconnectedAt = ci.disconnectedAt || Date.now(); }
+    else { ci.disconnectedAt = null; }
     // Clear pending flag once connection settles
     if (pc.iceConnectionState==='connected'||pc.iceConnectionState==='completed'||pc.iceConnectionState==='failed'||pc.iceConnectionState==='closed') {
       pendingConnects.delete(key);
@@ -513,10 +515,10 @@ async function handleSignal(fromId, data) {
     }
 
     var config = getIceConfig(); var pc = new RTCPeerConnection(config);
-    var ci = {pc:pc, role:'child', dc:null, iceState:'new', stats:{}, peerId:fromId, childTag:childTag};
+    var ci = {pc:pc, role:'child', dc:null, iceState:'new', stats:{}, peerId:fromId, childTag:childTag, createdAt:Date.now()};
     setConn(fromId, ourKey, ci);
     pc.onicecandidate = function(e){ if(e.candidate) socket.emit('signal',{targetId:fromId,data:{type:'candidate',candidate:e.candidate,connRole:ourKey}}); };
-    pc.oniceconnectionstatechange = function(){ ci.iceState=pc.iceConnectionState; log('ICE(子-'+childTag+') '+fromId.substring(0,8)+': '+pc.iceConnectionState); updateIceStatusUI(); };
+    pc.oniceconnectionstatechange = function(){ ci.iceState=pc.iceConnectionState; log('ICE(子-'+childTag+') '+fromId.substring(0,8)+': '+pc.iceConnectionState); if(pc.iceConnectionState==='disconnected'){ci.disconnectedAt=ci.disconnectedAt||Date.now();}else{ci.disconnectedAt=null;} updateIceStatusUI(); };
     pc.ondatachannel = function(e){ ci.dc=e.channel; e.channel.onmessage=function(ev){handleDcMessage(JSON.parse(ev.data),fromId);}; };
     var stream = myRole==='publisher'?localStream:receivedStream;
     if (stream && stream.getTracks().length > 0) { stream.getTracks().forEach(function(t){pc.addTrack(t,stream);}); log('添加 '+stream.getTracks().length+' 轨道 -> '+fromId.substring(0,8)); }
@@ -807,27 +809,34 @@ setInterval(function() {
     log('连接状态: role='+myRole+' primary='+(primaryParentId?primaryParentId.substring(0,8):'无')+' backup='+(backupParentId?backupParentId.substring(0,8):'无')+' pending='+pendingConnects.size+' conns=['+connSummary.join(', ')+']', 'debug');
   }
 
-  // Cleanup stale connections: stuck at 'new' ICE state for >15s, or disconnected/failed for >10s
+  // Cleanup stale connections: stuck at 'new' for >15s, disconnected for >15s, failed/closed for >10s
   var now = Date.now();
   var staleKeys = [];
   connections.forEach(function(conn, key) {
-    if (conn.role === 'child') return; // don't clean up child connections here
     var age = conn.createdAt ? (now - conn.createdAt) : 0;
     if (conn.iceState === 'new' && age > 15000) {
       staleKeys.push(key);
+    } else if (conn.iceState === 'disconnected' && age > 15000) {
+      // Track how long it's been disconnected, not just created
+      if (!conn.disconnectedAt) { conn.disconnectedAt = now; }
+      else if (now - conn.disconnectedAt > 15000) { staleKeys.push(key); }
     } else if ((conn.iceState === 'failed' || conn.iceState === 'closed') && age > 10000) {
       staleKeys.push(key);
+    } else {
+      // Reset disconnectedAt if state recovered
+      if (conn.disconnectedAt && conn.iceState !== 'disconnected') conn.disconnectedAt = null;
     }
   });
   staleKeys.forEach(function(key) {
     var conn = connections.get(key);
     if (conn) {
-      log('清理过期连接: '+key+' iceState='+conn.iceState+' age='+Math.round((now-(conn.createdAt||0))/1000)+'s','warn');
+      log('清理过期连接: '+key.split(':').map(function(p,i){return i===0?p.substring(0,8):p;}).join(':')+' iceState='+conn.iceState+' age='+Math.round((now-(conn.createdAt||0))/1000)+'s','warn');
       conn.pc.close();
       connections.delete(key);
       pendingConnects.delete(key);
     }
   });
+  if (staleKeys.length > 0) updateIceStatusUI();
 
   connections.forEach(function(conn){
     if(!conn.pc||conn.pc.connectionState==='closed')return;
