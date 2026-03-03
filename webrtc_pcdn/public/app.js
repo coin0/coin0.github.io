@@ -76,6 +76,10 @@ var networkRecoveryState = {
   maxReconnectAttempts: 5
 };
 
+// Rejection tracking - peers that rejected us recently (cooldown)
+var rejectedPeers = {}; // peerId -> { timestamp, count }
+var REJECTION_COOLDOWN = 10000; // 10 seconds cooldown after rejection
+
 // Previous state for change detection (reduce log spam)
 var prevLogState = {
   connSummary: '',
@@ -98,6 +102,32 @@ var peerNicknames = {};
 // Helpers
 // ============================================================
 function connKey(peerId, role) { return peerId + ':' + role; }
+
+// Check if a peer is in rejection cooldown
+function isPeerInCooldown(peerId) {
+  var rejection = rejectedPeers[peerId];
+  if (!rejection) return false;
+  if (Date.now() - rejection.timestamp > REJECTION_COOLDOWN) {
+    delete rejectedPeers[peerId];
+    return false;
+  }
+  return true;
+}
+
+// Mark a peer as having rejected us
+function markPeerRejected(peerId) {
+  var existing = rejectedPeers[peerId] || { count: 0 };
+  rejectedPeers[peerId] = {
+    timestamp: Date.now(),
+    count: existing.count + 1
+  };
+  // Update topology to reflect this peer has no fanout
+  var ns = topologyMap.get(peerId);
+  if (ns) {
+    ns.fanoutAvailable = 0;
+    ns.updatedAt = Date.now();
+  }
+}
 function getConn(peerId, role) { return connections.get(connKey(peerId, role)); }
 function setConn(peerId, role, ci) { connections.set(connKey(peerId, role), ci); }
 function deleteConn(peerId, role) { connections.delete(connKey(peerId, role)); }
@@ -354,10 +384,11 @@ function getNodeDepth(peerId) {
 // Select best parent from topology, excluding self and optionally excluding some peers
 function selectBestParent(excludeIds) {
   var candidates = [];
-  var skipped = { notReady: 0, noFanout: 0, excluded: 0 };
+  var skipped = { notReady: 0, noFanout: 0, excluded: 0, cooldown: 0 };
   topologyMap.forEach(function(ns, pid) {
     if (pid === myPeerId) return;
     if (excludeIds && excludeIds.indexOf(pid) >= 0) { skipped.excluded++; return; }
+    if (isPeerInCooldown(pid)) { skipped.cooldown++; return; }
     if (!ns.isReady) { skipped.notReady++; return; }
     if (ns.fanoutAvailable <= 0) { skipped.noFanout++; return; }
     candidates.push({ peerId: pid, ns: ns, score: parentScore(ns, pid) });
@@ -366,9 +397,9 @@ function selectBestParent(excludeIds) {
   if (candidates.length > 0) {
     log('选父候选: top3=[' + candidates.slice(0, 3).map(function(c) {
       return peerTag(c.peerId) + '(score=' + Math.round(c.score) + ',fanout=' + c.ns.fanoutAvailable + ',depth=' + getNodeDepth(c.peerId) + ')';
-    }).join(', ') + '] 跳过: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout, 'debug');
+    }).join(', ') + '] 跳过: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout + ' cooldown=' + skipped.cooldown, 'debug');
   } else {
-    log('选父无候选: topo=' + topologyMap.size + ' 跳过: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout, 'debug');
+    log('选父无候选: topo=' + topologyMap.size + ' 跳过: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout + ' cooldown=' + skipped.cooldown, 'debug');
   }
   return candidates.length > 0 ? candidates[0].peerId : null;
 }
@@ -387,10 +418,11 @@ function selectBackupParents(primaryId, count) {
     if (pSubtree) usedSubtrees.add(pSubtree);
   }
 
-  // Build candidate list
+  // Build candidate list (excluding peers in cooldown)
   var candidates = [];
   topologyMap.forEach(function(ns, pid) {
     if (exclude.indexOf(pid) >= 0) return;
+    if (isPeerInCooldown(pid)) return;
     if (!ns.isReady) return;
     if (ns.fanoutAvailable <= 0) return;
     var li = linkInfo.get(pid);
@@ -1449,6 +1481,9 @@ async function handleSignal(fromId, data) {
     var rejRole = data.connRole || 'primary';
     log('连接被拒绝: ' + peerTag(fromId) + ' role=' + rejRole + ' reason=' + data.reason, 'warn');
     
+    // Mark this peer as rejected (cooldown)
+    markPeerRejected(fromId);
+    
     // Close the pending connection
     var rejConn = getConn(fromId, rejRole);
     if (rejConn) {
@@ -1462,16 +1497,14 @@ async function handleSignal(fromId, data) {
       primaryParentId = null;
       log('主连接被拒绝，寻找替代父节点...', 'warn');
       
-      // Try alternatives suggested by the rejecting peer
+      // Try alternatives suggested by the rejecting peer (skip those in cooldown)
       if (data.alternatives && data.alternatives.length > 0) {
-        // Find the first alternative that's in our topology and has fanout
         for (var i = 0; i < data.alternatives.length; i++) {
           var altTag = data.alternatives[i];
-          // Extract peerId from tag (format: "shortId(nickname)" or just "shortId")
           var altId = null;
           topologyMap.forEach(function(ns, pid) {
             if (peerTag(pid) === altTag || pid.indexOf(altTag.split('(')[0]) === 0) {
-              if (ns.isReady && ns.fanoutAvailable > 0) altId = pid;
+              if (ns.isReady && ns.fanoutAvailable > 0 && !isPeerInCooldown(pid)) altId = pid;
             }
           });
           if (altId) {
@@ -1483,24 +1516,38 @@ async function handleSignal(fromId, data) {
         }
       }
       
-      // No suggested alternatives worked, use normal parent selection
+      // No suggested alternatives worked, use normal parent selection (excluding cooldown peers)
       var excludeIds = [myPeerId, fromId];
+      // Add all peers in cooldown to exclude list
+      Object.keys(rejectedPeers).forEach(function(pid) {
+        if (isPeerInCooldown(pid) && excludeIds.indexOf(pid) < 0) {
+          excludeIds.push(pid);
+        }
+      });
+      
       var newParent = selectBestParent(excludeIds);
       if (newParent) {
         primaryParentId = newParent;
         log('选择新主父节点: ' + peerTag(newParent));
         connectToParent(newParent, 'primary');
       } else {
-        // No parent available - wait for topology update and retry
-        log('无可用父节点，等待拓扑更新后重试...', 'warn');
+        // No parent available - wait for cooldown to expire and retry
+        log('所有节点已满或在冷却中，等待 ' + (REJECTION_COOLDOWN / 1000) + ' 秒后重试...', 'warn');
         showReconnectOverlay(true);
         setTimeout(function() {
           if (!primaryParentId) {
-            // Try again after getting more topology info
+            // Clear old rejections and try again
+            var now = Date.now();
+            Object.keys(rejectedPeers).forEach(function(pid) {
+              if (now - rejectedPeers[pid].timestamp > REJECTION_COOLDOWN) {
+                delete rejectedPeers[pid];
+              }
+            });
+            
             var retryParent = selectBestParent([myPeerId]);
             if (retryParent) {
               primaryParentId = retryParent;
-              log('重试连接到: ' + peerTag(retryParent));
+              log('冷却结束，重试连接到: ' + peerTag(retryParent));
               connectToParent(retryParent, 'primary');
               showReconnectOverlay(false);
             } else {
@@ -1509,16 +1556,19 @@ async function handleSignal(fromId, data) {
               requestNewBootstrapAndReconnect();
             }
           }
-        }, 3000);
+        }, REJECTION_COOLDOWN);
       }
     }
     
-    // If this was a backup, try to find another backup
+    // If this was a backup, try to find another backup (with cooldown consideration)
     var backupIdx = backupParents.indexOf(fromId);
     if (backupIdx >= 0) {
       backupParents.splice(backupIdx, 1);
       log('备用连接被拒绝，寻找替代...', 'warn');
-      maybeAdjustBackups();
+      // Don't immediately retry - let maybeAdjustBackups handle it with cooldown
+      setTimeout(function() {
+        maybeAdjustBackups();
+      }, 2000);
     }
   }
 }
@@ -2135,7 +2185,9 @@ function cleanupStaleConnections() {
   
   // Network recovery check: if viewer has no healthy connections and socket is up,
   // trigger recovery (handles case where network change event wasn't fired)
-  if (myRole === 'viewer' && totalConns > 0 && allStuck && !networkRecoveryState.isRecovering) {
+  // But don't trigger if we have peers in cooldown (we're waiting for retry)
+  var peersInCooldown = Object.keys(rejectedPeers).filter(function(pid) { return isPeerInCooldown(pid); }).length;
+  if (myRole === 'viewer' && totalConns > 0 && allStuck && !networkRecoveryState.isRecovering && peersInCooldown === 0) {
     var socketOk = socket && socket.connected;
     if (socketOk) {
       log('检测到所有连接异常 (stuck=' + stuckInNewCount + '/' + totalConns + ')，触发网络恢复', 'warn');
