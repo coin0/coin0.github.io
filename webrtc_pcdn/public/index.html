@@ -217,6 +217,7 @@ video { width: 100%; border-radius: 6px; background: #000; }
   <div class="stat-item">🌳 树深度: <span id="statDepth">0</span></div>
   <div class="stat-item">💾 带宽节省: <span id="statSaved">0%</span></div>
   <div class="stat-item">📡 主播上行: <span id="statPcdn">0</span> 路</div>
+  <div class="stat-item">🔗 链路: <span id="statLinks">-</span></div>
 </div>
 
 <!-- Tabs -->
@@ -348,8 +349,13 @@ video { width: 100%; border-radius: 6px; background: #000; }
         <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#e94560"></div> 主播</div>
         <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#27ae60"></div> 中继节点</div>
         <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#3498db"></div> 观众</div>
-        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#555"></div> 离线</div>
         <div class="topo-legend-item"><div class="topo-legend-dot" style="background:transparent;border:1px dashed #f90"></div> 备用连接</div>
+      </div>
+      <div class="topo-legend" style="margin-top:4px">
+        <div class="topo-legend-item"><div style="width:20px;height:3px;background:#0f9;border-radius:2px"></div> LOCAL</div>
+        <div class="topo-legend-item"><div style="width:20px;height:2px;background:#39f;border-radius:2px"></div> NEARBY</div>
+        <div class="topo-legend-item"><div style="width:20px;height:2px;background:#888;border-radius:2px"></div> REMOTE</div>
+        <div class="topo-legend-item"><div style="width:20px;height:2px;background:#f33;border-radius:2px;border:1px dashed #f33"></div> RELAY</div>
       </div>
     </div>
     <div class="node-detail" id="nodeDetail">
@@ -363,7 +369,7 @@ video { width: 100%; border-radius: 6px; background: #000; }
 <div class="tab-content" id="tab-log">
   <div class="container col">
     <div class="panel log-panel" style="max-height:600px">
-      <h2>📋 系统日志</h2>
+      <h2 style="display:flex;align-items:center;justify-content:space-between">📋 系统日志 <button onclick="copyLogs()" style="font-size:12px;padding:3px 10px;cursor:pointer;background:var(--surface);color:var(--accent2);border:1px solid var(--accent2);border-radius:4px">📋 复制日志</button></h2>
       <div id="logArea"></div>
     </div>
   </div>
