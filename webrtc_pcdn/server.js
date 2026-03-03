@@ -253,8 +253,8 @@ io.on('connection', (socket) => {
     if (!room.publisher && !room.publisherOffline) return callback({ error: '房间无主播' });
 
     const bootstrapNodes = getBootstrapNodes(room, socket.id);
-    console.log(`[requestBootstrap] ${socket.id} room=${roomId} bootstraps=${bootstrapNodes.length}`);
-    callback({ success: true, bootstrapNodes });
+    console.log(`[requestBootstrap] ${socket.id} room=${roomId} bootstraps=${bootstrapNodes.length} pubOffline=${room.publisherOffline}`);
+    callback({ success: true, bootstrapNodes, publisherOffline: room.publisherOffline });
   });
 
   // ---- Disconnect ----

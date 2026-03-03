@@ -816,6 +816,14 @@ function requestNewBootstrapAndReconnect() {
   // Request fresh bootstrap nodes from server
   socket.emit('requestBootstrap', { roomId: currentRoomId }, async function(res) {
     if (res.error) {
+      // Check if room/publisher is gone
+      if (res.error.indexOf('不存在') >= 0 || res.error.indexOf('无主播') >= 0) {
+        log('主播已离开房间: ' + res.error, 'warn');
+        alert('直播已结束');
+        cleanup();
+        switchTab('lobby');
+        return;
+      }
       log('获取引导节点失败: ' + res.error, 'error');
       networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
@@ -823,10 +831,21 @@ function requestNewBootstrapAndReconnect() {
     }
 
     var bootstrapNodes = res.bootstrapNodes || [];
-    log('收到 ' + bootstrapNodes.length + ' 个引导节点 (网络恢复)');
+    var publisherOffline = res.publisherOffline;
+    
+    // Check if publisher is offline
+    if (publisherOffline) {
+      log('主播当前离线，等待重连...', 'warn');
+    }
+    
+    log('收到 ' + bootstrapNodes.length + ' 个引导节点 (网络恢复)' + (publisherOffline ? ' [主播离线]' : ''));
 
     if (bootstrapNodes.length === 0) {
-      log('无可用引导节点', 'error');
+      if (publisherOffline) {
+        log('主播离线且无可用节点，等待主播重连...', 'warn');
+      } else {
+        log('无可用引导节点', 'error');
+      }
       networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
       return;
@@ -838,7 +857,7 @@ function requestNewBootstrapAndReconnect() {
       peerNicknames[pid] = node.nickname;
       if (!topologyMap.has(pid)) {
         topologyMap.set(pid, {
-          peerId: pid, nickname: node.nickname, role: node.role || 'viewer',
+          peerId: pid, nickname: node.nickname, role: node.isPublisher ? 'publisher' : 'viewer',
           parentId: null, backupParentIds: [], children: [],
           linkTypes: {}, isReady: true, joinedAt: Date.now(),
           fanoutMax: MAX_FANOUT, fanoutAvailable: MAX_FANOUT, updatedAt: Date.now()
@@ -1842,6 +1861,13 @@ function startPeriodicTasks() {
     optimizeParentIfBetter();
   }, 30000));
 
+  // Room status check (every 30s) - detect if host left while we were disconnected
+  periodicTimers.push(setInterval(function() {
+    if (!myPeerId || myRole !== 'viewer' || !currentRoomId) return;
+    if (!socket || !socket.connected) return;
+    checkRoomStatus();
+  }, 30000));
+
   // Connection state dump (only log on change)
   periodicTimers.push(setInterval(function() {
     if (!myPeerId) return;
@@ -1862,6 +1888,19 @@ function startPeriodicTasks() {
       }
     }
   }, 5000));
+}
+
+// Check if room/host still exists (handles case where we missed roomClosed event)
+function checkRoomStatus() {
+  socket.emit('getRoomList', function(list) {
+    var roomExists = list.some(function(r) { return r.roomId === currentRoomId; });
+    if (!roomExists) {
+      log('房间已不存在，主播已离开', 'warn');
+      alert('直播已结束');
+      cleanup();
+      switchTab('lobby');
+    }
+  });
 }
 
 function collectStats() {
