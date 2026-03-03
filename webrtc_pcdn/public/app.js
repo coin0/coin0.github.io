@@ -758,6 +758,13 @@ function checkAndRecoverConnections() {
     return;
   }
 
+  // Don't interfere if failover is already handling recovery
+  if (failoverInProgress) {
+    log('故障转移进行中，跳过网络恢复检查', 'debug');
+    networkRecoveryState.isRecovering = false;
+    return;
+  }
+
   // Check if socket is connected
   var socketOk = socket && socket.connected;
 
@@ -1058,7 +1065,16 @@ function handlePeerLeft(peerId) {
 // ============================================================
 // Failover: promote backup or find new parent
 // ============================================================
+var failoverInProgress = false; // Prevent race with network recovery
+
 async function promoteOrFindNewPrimary() {
+  // Prevent race condition with network recovery
+  if (failoverInProgress) {
+    log('故障转移已在进行中，跳过', 'debug');
+    return;
+  }
+  failoverInProgress = true;
+  
   showReconnectOverlay(true);
   resetHealthState();
 
@@ -1099,6 +1115,7 @@ async function promoteOrFindNewPrimary() {
       maybeAdjustBackups();
       broadcastGossip();
       updateIceStatusUI();
+      failoverInProgress = false;
       return;
     }
   }
@@ -1119,6 +1136,7 @@ async function promoteOrFindNewPrimary() {
     // Will retry on next gossip update
   }
   showReconnectOverlay(false);
+  failoverInProgress = false;
 }
 
 // ============================================================
@@ -2233,8 +2251,9 @@ function cleanupStaleConnections() {
     else if ((conn.iceState === 'failed' || conn.iceState === 'closed') && age > 10000) staleKeys.push(key);
     else if (conn.disconnectedAt && conn.iceState !== 'disconnected') conn.disconnectedAt = null;
     
-    // Track if any connection is healthy
-    if (conn.iceState === 'connected' || conn.iceState === 'completed') {
+    // Track if any connection is healthy or actively negotiating
+    // 'checking' means ICE is actively working, not stuck
+    if (conn.iceState === 'connected' || conn.iceState === 'completed' || conn.iceState === 'checking') {
       allStuck = false;
     }
   });
@@ -2268,8 +2287,9 @@ function cleanupStaleConnections() {
   // Network recovery check: if viewer has no healthy connections and socket is up,
   // trigger recovery (handles case where network change event wasn't fired)
   // But don't trigger if we have peers in cooldown (we're waiting for retry)
+  // Also don't trigger if failover is already in progress
   var peersInCooldown = Object.keys(rejectedPeers).filter(function(pid) { return isPeerInCooldown(pid); }).length;
-  if (myRole === 'viewer' && totalConns > 0 && allStuck && !networkRecoveryState.isRecovering && peersInCooldown === 0) {
+  if (myRole === 'viewer' && totalConns > 0 && allStuck && !networkRecoveryState.isRecovering && !failoverInProgress && peersInCooldown === 0) {
     var socketOk = socket && socket.connected;
     if (socketOk) {
       log('检测到所有连接异常 (stuck=' + stuckInNewCount + '/' + totalConns + ')，触发网络恢复', 'warn');
@@ -2661,6 +2681,7 @@ function cleanup() {
   if (socket) { socket.disconnect(); socket = null; }
   myRole = null; myPeerId = null; myNodeState = null;
   isJoining = false; // Reset join flag
+  failoverInProgress = false; // Reset failover flag
 }
 
 window.addEventListener('resize', function() {
