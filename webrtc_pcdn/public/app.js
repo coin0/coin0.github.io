@@ -1158,15 +1158,18 @@ function maybeAdjustBackups() {
     if (ns.backupParentIds && ns.backupParentIds.indexOf(myPeerId) >= 0) { mutualBackupExcluded.push(pid); }
   });
 
-  // Also exclude peers we already have a primary-child connection to (they depend on us for main stream).
-  // Backup-children are OK — a peer pulling backup from us can still be our backup too.
+  // Also exclude peers we already have ANY child connection to (primary or backup)
+  // Creating a backup connection to someone who is our child causes key collisions
   var childExcluded = [];
   connections.forEach(function(ci) {
-    if (ci.role === 'child' && ci.childTag === 'primary' && excludeIds.indexOf(ci.peerId) < 0) { excludeIds.push(ci.peerId); childExcluded.push(peerTag(ci.peerId)); }
+    if (ci.role === 'child' && excludeIds.indexOf(ci.peerId) < 0) {
+      excludeIds.push(ci.peerId);
+      childExcluded.push(peerTag(ci.peerId) + '(' + (ci.childTag || 'child') + ')');
+    }
   });
 
   if (dependentExcluded.length > 0 || childExcluded.length > 0) {
-    log('备用排除: 依赖=[' + dependentExcluded.join(',') + '] 主子节点=[' + childExcluded.join(',') + ']', 'debug');
+    log('备用排除: 依赖=[' + dependentExcluded.join(',') + '] 子节点=[' + childExcluded.join(',') + ']', 'debug');
   }
 
   // First pass: exclude mutual-backup peers (prefer non-circular backups)
@@ -2243,10 +2246,20 @@ function cleanupStaleConnections() {
       var discAge = conn.disconnectedAt ? Math.round((now - conn.disconnectedAt) / 1000) : '-';
       log('清理过期连接: ' + key + ' ice=' + conn.iceState + ' age=' + age + 's discAge=' + discAge + 's peer=' + peerTag(conn.peerId), 'warn');
       conn.pc.close(); connections.delete(key); pendingConnects.delete(key);
+      
       // If this was our primary, failover
       if (conn.peerId === primaryParentId && conn.role === 'primary') {
         primaryParentId = null;
         promoteOrFindNewPrimary();
+      }
+      
+      // If this was a backup connection, remove from backupParents array
+      if (conn.role && conn.role.indexOf('backup') === 0) {
+        var bIdx = backupParents.indexOf(conn.peerId);
+        if (bIdx >= 0) {
+          backupParents.splice(bIdx, 1);
+          log('从备用列表移除: ' + peerTag(conn.peerId), 'debug');
+        }
       }
     }
   });
