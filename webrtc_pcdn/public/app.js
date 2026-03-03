@@ -68,6 +68,13 @@ var STALE_CONN_CHECK_INTERVAL = 5000;
 var streamHealthState = { prevBytesReceived: 0, stallCount: 0, failoverInProgress: false };
 function resetHealthState() { streamHealthState = { prevBytesReceived: 0, stallCount: 0, failoverInProgress: false }; }
 
+// Previous state for change detection (reduce log spam)
+var prevLogState = {
+  connSummary: '',
+  backupStatus: '',
+  gossipTargets: 0
+};
+
 // Dedup
 var seenMsgIds = new Set();
 function markSeen(id) { seenMsgIds.add(id); if (seenMsgIds.size > 300) { var it = seenMsgIds.values(); seenMsgIds.delete(it.next().value); } }
@@ -454,8 +461,10 @@ function broadcastGossip() {
       try { ci.dc.send(JSON.stringify(gossipMsg)); gossipSentTo.push(peerTag(ci.peerId)); } catch(e) {}
     }
   });
-  if (gossipSentTo.length > 0) {
+  // Only log when target count changes
+  if (gossipSentTo.length > 0 && gossipSentTo.length !== prevLogState.gossipTargets) {
     log('Gossip广播 v' + gossipVersion + ' -> ' + gossipSentTo.length + '节点 topo=' + topologyMap.size, 'debug');
+    prevLogState.gossipTargets = gossipSentTo.length;
   }
 }
 
@@ -481,7 +490,8 @@ function handleGossipMessage(msg, fromId) {
       }
     });
   }
-  if (mergedNodes.length > 0) {
+  if (mergedNodes.length > 1) {
+    // Only log when multiple nodes updated (skip single-node heartbeat updates)
     log('Gossip合并 from ' + peerTag(fromId) + ': 更新 ' + mergedNodes.length + ' 节点 [' + mergedNodes.join(', ') + '] topo=' + topologyMap.size, 'debug');
   }
 
@@ -785,11 +795,16 @@ function maybeAdjustBackups() {
   var current = backupParents.length;
 
   if (current >= desired) {
-    log('备用连接充足: ' + current + '/' + desired + ' [' + backupParents.map(peerTag).join(', ') + ']', 'debug');
+    var backupStatus = current + '/' + desired + ':' + backupParents.join(',');
+    if (backupStatus !== prevLogState.backupStatus) {
+      log('备用连接充足: ' + current + '/' + desired + ' [' + backupParents.map(peerTag).join(', ') + ']', 'debug');
+      prevLogState.backupStatus = backupStatus;
+    }
     return;
   }
 
   log('备用连接不足: ' + current + '/' + desired + '，寻找新备用', 'debug');
+  prevLogState.backupStatus = current + '/' + desired + ':' + backupParents.join(',');
 
   // Exclude: self, primary, existing backups, AND any peer whose backup is us
   // (prevents mutual backup: A backs up B while B backs up A — circular and useless)
@@ -1376,7 +1391,7 @@ function optimizeParentIfBetter() {
   // Never migrate away from the publisher — it's always the best root
   var currentNs = topologyMap.get(primaryParentId);
   if (currentNs && currentNs.role === 'publisher') {
-    log('父节点优化: 跳过(当前父是主播)', 'debug');
+    // Skip logging - this is the expected stable state
     return;
   }
 
@@ -1557,13 +1572,15 @@ function startPeriodicTasks() {
     optimizeParentIfBetter();
   }, 30000));
 
-  // Connection state dump
+  // Connection state dump (only log on change)
   periodicTimers.push(setInterval(function() {
     if (!myPeerId) return;
     var connSummary = [];
     connections.forEach(function(conn, key) { connSummary.push(key + '=' + conn.iceState + (conn.stream ? '(' + conn.stream.getTracks().length + 't)' : '') + (conn.dc ? '[dc=' + conn.dc.readyState + ']' : '[no-dc]')); });
-    if (connSummary.length > 0) {
-      log('连接状态: role=' + myRole + ' primary=' + peerTag(primaryParentId) + ' backups=[' + backupParents.map(peerTag).join(',') + '] topo=' + topologyMap.size + '节点 pending=' + pendingConnects.size + ' conns=[' + connSummary.join(', ') + ']', 'debug');
+    var summaryStr = connSummary.join(', ');
+    if (connSummary.length > 0 && summaryStr !== prevLogState.connSummary) {
+      log('连接状态: role=' + myRole + ' primary=' + peerTag(primaryParentId) + ' backups=[' + backupParents.map(peerTag).join(',') + '] topo=' + topologyMap.size + '节点 pending=' + pendingConnects.size + ' conns=[' + summaryStr + ']', 'debug');
+      prevLogState.connSummary = summaryStr;
     }
     // Update viewer status bar
     if (myRole === 'viewer') {
