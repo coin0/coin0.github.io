@@ -2065,6 +2065,8 @@ function autoRejoin() {
   var savedPwd = currentRoomPwd;
   var savedNick = myNickname;
   log('自动重连: role=' + savedRole + ' room=' + savedRoom + ' nick=' + savedNick, 'warn');
+  // Block network recovery from interfering while we're doing our own reconnection
+  networkRecoveryState.isRecovering = true;
   closeAllPeerConnections();
   showReconnectOverlay(true);
 
@@ -2075,12 +2077,13 @@ function autoRejoin() {
       password: savedPwd,
       nickname: savedNick
     }, function(res) {
-      if (res.error) { log('主播重连失败: ' + res.error, 'error'); showReconnectOverlay(false); return; }
+      if (res.error) { log('主播重连失败: ' + res.error, 'error'); networkRecoveryState.isRecovering = false; showReconnectOverlay(false); return; }
       myPeerId = res.peerId; myRole = 'publisher';
       if (res.iceConfig) serverIceConfig = res.iceConfig;
       myNodeState = createMyNodeState();
       topologyMap.set(myPeerId, myNodeState);
       log('主播重连成功 room=' + savedRoom);
+      networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
       broadcastGossip();
     });
@@ -2088,7 +2091,7 @@ function autoRejoin() {
     socket.emit('joinRoom', {
       roomId: savedRoom, password: savedPwd, nickname: savedNick
     }, async function(res) {
-      if (res.error) { log('观众重连失败: ' + res.error, 'error'); showReconnectOverlay(false); return; }
+      if (res.error) { log('观众重连失败: ' + res.error, 'error'); networkRecoveryState.isRecovering = false; showReconnectOverlay(false); return; }
       myPeerId = res.peerId; myRole = 'viewer';
       if (res.iceConfig) serverIceConfig = res.iceConfig;
       myNodeState = createMyNodeState();
@@ -2102,6 +2105,7 @@ function autoRejoin() {
         setTimeout(function() { maybeAdjustBackups(); }, 3000);
       }
       log('观众重连成功 room=' + savedRoom);
+      networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
     });
   }
