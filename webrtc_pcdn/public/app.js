@@ -1124,6 +1124,13 @@ async function promoteOrFindNewPrimary() {
   log('无可用备用，从拓扑中选择新父节点', 'warn');
   var excludeList = [myPeerId];
   backupParents.forEach(function(bp) { excludeList.push(bp); });
+  // Also exclude any peer we already have a child connection to —
+  // connecting to our own child as parent causes signaling confusion
+  connections.forEach(function(ci) {
+    if (ci.role === 'child' && excludeList.indexOf(ci.peerId) < 0) {
+      excludeList.push(ci.peerId);
+    }
+  });
   var newParent = selectBestParent(excludeList);
   if (newParent) {
     primaryParentId = newParent;
@@ -1216,7 +1223,8 @@ function maybeAdjustBackups() {
   });
 
   if (filteredBackups.length === 0) {
-    var noBackupReason = 'topo=' + topologyMap.size + ',exclude=' + excludeIds.length + ',mutual=' + mutualBackupExcluded.length;
+    // Key on exclude/mutual counts only — topo size fluctuates and causes spam
+    var noBackupReason = 'exclude=' + excludeIds.length + ',mutual=' + mutualBackupExcluded.length;
     if (noBackupReason !== prevLogState.noBackupReason) {
       log('无可用备用候选 (拓扑=' + topologyMap.size + '节点, 排除=' + excludeIds.length + ', 互备排除=' + mutualBackupExcluded.length + ')', 'debug');
       prevLogState.noBackupReason = noBackupReason;
