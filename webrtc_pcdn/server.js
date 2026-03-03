@@ -246,6 +246,17 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('reaction', { from: socket.id, emoji });
   });
 
+  // ---- Request Bootstrap Nodes (for network recovery) ----
+  socket.on('requestBootstrap', ({ roomId }, callback) => {
+    const room = rooms[roomId];
+    if (!room) return callback({ error: '房间不存在' });
+    if (!room.publisher && !room.publisherOffline) return callback({ error: '房间无主播' });
+
+    const bootstrapNodes = getBootstrapNodes(room, socket.id);
+    console.log(`[requestBootstrap] ${socket.id} room=${roomId} bootstraps=${bootstrapNodes.length}`);
+    callback({ success: true, bootstrapNodes });
+  });
+
   // ---- Disconnect ----
   socket.on('disconnect', (reason) => {
     console.log(`[disconnect] ${socket.id} reason=${reason} room=${currentRoom} role=${currentRole}`);

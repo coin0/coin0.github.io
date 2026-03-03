@@ -68,6 +68,14 @@ var STALE_CONN_CHECK_INTERVAL = 5000;
 var streamHealthState = { prevBytesReceived: 0, stallCount: 0, failoverInProgress: false };
 function resetHealthState() { streamHealthState = { prevBytesReceived: 0, stallCount: 0, failoverInProgress: false }; }
 
+// Network recovery state
+var networkRecoveryState = {
+  isRecovering: false,
+  lastNetworkChange: 0,
+  reconnectAttempts: 0,
+  maxReconnectAttempts: 5
+};
+
 // Previous state for change detection (reduce log spam)
 var prevLogState = {
   connSummary: '',
@@ -521,14 +529,15 @@ function handleGossipMessage(msg, fromId) {
 // Remove stale nodes from topology (not seen in gossip for a while)
 function pruneTopology() {
   var now = Date.now();
-  var staleThreshold = 30000; // 30s
+  // Extend threshold during network recovery to preserve topology knowledge
+  var staleThreshold = networkRecoveryState.isRecovering ? 60000 : 30000;
   var toRemove = [];
   topologyMap.forEach(function(ns, pid) {
     if (pid === myPeerId) return;
     if (now - ns.updatedAt > staleThreshold) toRemove.push(pid);
   });
   if (toRemove.length > 0) {
-    log('拓扑修剪: 移除 ' + toRemove.length + ' 个过期节点 [' + toRemove.map(peerTag).join(', ') + ']', 'debug');
+    log('拓扑修剪: 移除 ' + toRemove.length + ' 个过期节点 [' + toRemove.map(peerTag).join(', ') + ']' + (networkRecoveryState.isRecovering ? ' (恢复中,阈值=' + staleThreshold/1000 + 's)' : ''), 'debug');
   }
   toRemove.forEach(function(pid) {
     topologyMap.delete(pid);
@@ -563,8 +572,28 @@ function relaySdpSignal(targetId, data) {
     }
     return;
   }
+
+  // Socket is down - check if we have any usable DataChannels for relay
+  var usableDcCount = 0;
+  connections.forEach(function(ci) {
+    if (ci.dc && ci.dc.readyState === 'open') usableDcCount++;
+  });
+
+  if (usableDcCount === 0) {
+    // No socket AND no usable DataChannels - this is a network switch scenario
+    // All connections are dead, need to trigger network recovery
+    log('信令发送失败: socket断开且无可用DC (可能网络切换)', 'error');
+    
+    // Only trigger recovery once, not for every signal attempt
+    if (!networkRecoveryState.isRecovering) {
+      log('触发网络恢复流程...', 'warn');
+      handleNetworkChange();
+    }
+    return;
+  }
+
   // Fallback: relay through DataChannel
-  log('信令发送(DC relay): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole + ' (socket断开)', 'warn');
+  log('信令发送(DC relay): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole + ' (socket断开, dc=' + usableDcCount + ')', 'warn');
   var relayMsg = {
     type: 'relay-signal',
     fromId: myPeerId,
@@ -641,11 +670,203 @@ function handleRttPong(msg, fromId) {
 }
 
 // ============================================================
+// Network Change Detection
+// ============================================================
+function initNetworkChangeDetection() {
+  // Detect network type changes (WiFi <-> Cellular)
+  if (navigator.connection) {
+    navigator.connection.addEventListener('change', function() {
+      log('网络类型变化: ' + navigator.connection.effectiveType + ' (' + navigator.connection.type + ')', 'warn');
+      handleNetworkChange();
+    });
+  }
+
+  // Detect online/offline events
+  window.addEventListener('online', function() {
+    log('网络恢复在线', 'warn');
+    handleNetworkChange();
+  });
+
+  window.addEventListener('offline', function() {
+    log('网络离线', 'error');
+    showReconnectOverlay(true);
+  });
+}
+
+function handleNetworkChange() {
+  if (!myRole || !currentRoomId) return;
+  if (networkRecoveryState.isRecovering) return;
+
+  networkRecoveryState.lastNetworkChange = Date.now();
+  networkRecoveryState.isRecovering = true;
+
+  log('检测到网络变化，检查连接状态...', 'warn');
+  showReconnectOverlay(true);
+
+  // Give network a moment to stabilize
+  setTimeout(function() {
+    checkAndRecoverConnections();
+  }, 1000);
+}
+
+function checkAndRecoverConnections() {
+  if (!myRole || !currentRoomId) {
+    networkRecoveryState.isRecovering = false;
+    return;
+  }
+
+  // Check if socket is connected
+  var socketOk = socket && socket.connected;
+
+  // Check if primary connection is still alive
+  var primaryOk = false;
+  if (primaryParentId) {
+    var pc = getConn(primaryParentId, 'primary');
+    if (pc && (pc.iceState === 'connected' || pc.iceState === 'completed')) {
+      primaryOk = true;
+    }
+  }
+
+  // Check if ANY WebRTC connection is alive (including backups)
+  var anyConnAlive = false;
+  var allConnsStuck = true; // All connections stuck in 'new' state
+  var stuckCount = 0;
+  var totalCount = 0;
+  connections.forEach(function(ci) {
+    totalCount++;
+    if (ci.iceState === 'connected' || ci.iceState === 'completed') {
+      anyConnAlive = true;
+      allConnsStuck = false;
+    } else if (ci.iceState !== 'new') {
+      allConnsStuck = false;
+    } else {
+      // Check if stuck in 'new' for too long (>10s)
+      var age = ci.createdAt ? (Date.now() - ci.createdAt) : 0;
+      if (age > 10000) stuckCount++;
+    }
+  });
+
+  // For publisher, check if we have any connected children
+  if (myRole === 'publisher') {
+    var hasConnectedChild = false;
+    connections.forEach(function(ci) {
+      if (ci.role === 'child' && (ci.iceState === 'connected' || ci.iceState === 'completed')) {
+        hasConnectedChild = true;
+      }
+    });
+    if (socketOk) {
+      log('主播网络恢复: socket=' + (socketOk ? 'ok' : 'down') + ' children=' + (hasConnectedChild ? 'ok' : 'none'), 'warn');
+      showReconnectOverlay(false);
+      networkRecoveryState.isRecovering = false;
+      // Broadcast gossip to let viewers know we're back
+      broadcastGossip();
+    } else {
+      log('主播等待信令重连...', 'warn');
+      // Socket.io will auto-reconnect and trigger autoRejoin
+      networkRecoveryState.isRecovering = false;
+    }
+    return;
+  }
+
+  // For viewer - detailed status
+  log('观众网络恢复检查: socket=' + (socketOk ? 'ok' : 'down') + ' primary=' + (primaryOk ? 'ok' : 'down') + ' anyConn=' + (anyConnAlive ? 'ok' : 'down') + ' stuck=' + stuckCount + '/' + totalCount, 'warn');
+
+  if (socketOk && primaryOk) {
+    // Everything is fine
+    log('连接正常，无需恢复');
+    showReconnectOverlay(false);
+    networkRecoveryState.isRecovering = false;
+    return;
+  }
+
+  // Detect "all connections stuck in ice=new" scenario (network switch killed everything)
+  if (socketOk && totalCount > 0 && allConnsStuck && stuckCount > 0) {
+    log('所有连接卡在ice=new状态，可能网络切换导致，重新获取引导节点...', 'warn');
+    requestNewBootstrapAndReconnect();
+    return;
+  }
+
+  if (socketOk && !primaryOk) {
+    // Socket is ok but WebRTC died - need to reconnect to peers
+    log('WebRTC连接断开，重新获取引导节点...', 'warn');
+    requestNewBootstrapAndReconnect();
+    return;
+  }
+
+  if (!socketOk) {
+    // Socket is down - wait for auto-reconnect
+    log('等待信令重连...', 'warn');
+    networkRecoveryState.isRecovering = false;
+    // Socket.io will auto-reconnect and trigger autoRejoin via 'connect' event
+  }
+}
+
+function requestNewBootstrapAndReconnect() {
+  if (!socket || !socket.connected) {
+    log('无法获取引导节点: 信令未连接', 'error');
+    networkRecoveryState.isRecovering = false;
+    return;
+  }
+
+  // Close all dead connections first
+  closeAllPeerConnections();
+  primaryParentId = null;
+  backupParents = [];
+
+  // Request fresh bootstrap nodes from server
+  socket.emit('requestBootstrap', { roomId: currentRoomId }, async function(res) {
+    if (res.error) {
+      log('获取引导节点失败: ' + res.error, 'error');
+      networkRecoveryState.isRecovering = false;
+      showReconnectOverlay(false);
+      return;
+    }
+
+    var bootstrapNodes = res.bootstrapNodes || [];
+    log('收到 ' + bootstrapNodes.length + ' 个引导节点 (网络恢复)');
+
+    if (bootstrapNodes.length === 0) {
+      log('无可用引导节点', 'error');
+      networkRecoveryState.isRecovering = false;
+      showReconnectOverlay(false);
+      return;
+    }
+
+    // Rebuild topology from bootstrap
+    bootstrapNodes.forEach(function(node) {
+      var pid = node.peerId || node.socketId;
+      peerNicknames[pid] = node.nickname;
+      if (!topologyMap.has(pid)) {
+        topologyMap.set(pid, {
+          peerId: pid, nickname: node.nickname, role: node.role || 'viewer',
+          parentId: null, backupParentIds: [], children: [],
+          linkTypes: {}, isReady: true, joinedAt: Date.now(),
+          fanoutMax: MAX_FANOUT, fanoutAvailable: MAX_FANOUT, updatedAt: Date.now()
+        });
+      }
+    });
+
+    // Connect to first bootstrap node as primary
+    primaryParentId = bootstrapNodes[0].peerId || bootstrapNodes[0].socketId;
+    log('网络恢复: 连接到 ' + peerTag(primaryParentId));
+    await connectToParent(primaryParentId, 'primary');
+
+    // Setup backups after primary connects
+    setTimeout(function() {
+      maybeAdjustBackups();
+      networkRecoveryState.isRecovering = false;
+      showReconnectOverlay(false);
+    }, 3000);
+  });
+}
+
+// ============================================================
 // Socket.io — Minimal Bootstrap
 // ============================================================
 function initSocket() {
   if (socket) return;
   socket = io();
+  initNetworkChangeDetection(); // Add network change detection
   socket.on('connect', function() {
     log('已连接信令服务器 id=' + socket.id);
     if (myRole && currentRoomId) {
@@ -690,7 +911,23 @@ function initSocket() {
     appendChatMessage(msg);
   });
   socket.on('reaction', function(d) { showReactionFloat(d.emoji); });
-  socket.on('disconnect', function() { log('信令断开', 'error'); });
+  socket.on('disconnect', function(reason) {
+    log('信令断开: ' + reason, 'error');
+    // Socket.io will auto-reconnect, but we need to handle the case where
+    // all WebRTC connections also died (network switch scenario)
+    networkRecoveryState.lastNetworkChange = Date.now();
+  });
+  socket.on('reconnect', function(attemptNumber) {
+    log('信令重连成功 (尝试 ' + attemptNumber + ' 次)', 'warn');
+  });
+  socket.on('reconnect_attempt', function(attemptNumber) {
+    if (attemptNumber === 1) {
+      log('信令重连中...', 'warn');
+    }
+  });
+  socket.on('reconnect_failed', function() {
+    log('信令重连失败，请刷新页面', 'error');
+  });
 }
 
 // ============================================================
@@ -1645,16 +1882,31 @@ function collectStats() {
 function cleanupStaleConnections() {
   var now = Date.now();
   var staleKeys = [];
+  var allStuck = true;
+  var stuckInNewCount = 0;
+  var totalConns = 0;
+  
   connections.forEach(function(conn, key) {
+    totalConns++;
     var age = conn.createdAt ? (now - conn.createdAt) : 0;
-    if (conn.iceState === 'new' && age > 15000) staleKeys.push(key);
+    if (conn.iceState === 'new' && age > 15000) {
+      staleKeys.push(key);
+      stuckInNewCount++;
+    }
     else if (conn.iceState === 'disconnected') {
       if (!conn.disconnectedAt) conn.disconnectedAt = now;
       else if (now - conn.disconnectedAt > 15000) staleKeys.push(key);
+      allStuck = false;
     }
     else if ((conn.iceState === 'failed' || conn.iceState === 'closed') && age > 10000) staleKeys.push(key);
     else if (conn.disconnectedAt && conn.iceState !== 'disconnected') conn.disconnectedAt = null;
+    
+    // Track if any connection is healthy
+    if (conn.iceState === 'connected' || conn.iceState === 'completed') {
+      allStuck = false;
+    }
   });
+  
   staleKeys.forEach(function(key) {
     var conn = connections.get(key);
     if (conn) {
@@ -1670,6 +1922,16 @@ function cleanupStaleConnections() {
     }
   });
   if (staleKeys.length > 0) updateIceStatusUI();
+  
+  // Network recovery check: if viewer has no healthy connections and socket is up,
+  // trigger recovery (handles case where network change event wasn't fired)
+  if (myRole === 'viewer' && totalConns > 0 && allStuck && !networkRecoveryState.isRecovering) {
+    var socketOk = socket && socket.connected;
+    if (socketOk) {
+      log('检测到所有连接异常 (stuck=' + stuckInNewCount + '/' + totalConns + ')，触发网络恢复', 'warn');
+      handleNetworkChange();
+    }
+  }
 }
 
 // ============================================================
