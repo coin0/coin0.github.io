@@ -585,7 +585,8 @@ function appendChatMessage(msg) {
 function sendReaction(emoji) { if(!socket)return; socket.emit('reaction',{emoji:emoji}); showReactionFloat(emoji); }
 function showReactionFloat(emoji) {
   var c=document.getElementById('reactionFloat'),el=document.createElement('div');
-  el.className='reaction-anim'; el.textContent=emoji; el.style.left=Math.random()*40+'px';
+  el.className='reaction-anim'; el.textContent=emoji;
+  el.style.left=(Math.random()*80-40)+'px';
   c.appendChild(el); setTimeout(function(){el.remove();},2000);
 }
 
