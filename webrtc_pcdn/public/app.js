@@ -898,13 +898,32 @@ function initSocket() {
     try { await handleSignal(d.fromId, d.data); } catch(e) { log('信令错误: ' + e.message, 'error'); }
   });
   socket.on('roomList', function(list) { renderRoomList(list); });
-  socket.on('roomClosed', function() { log('房间已关闭', 'warn'); alert('直播已结束'); cleanup(); switchTab('lobby'); });
+  socket.on('roomClosed', function() {
+    log('房间已关闭，主播已离开', 'warn');
+    alert('直播已结束，主播已离开房间');
+    cleanup();
+    switchTab('lobby');
+  });
   socket.on('publisherOffline', function(d) {
     log('主播暂时离线，等待重连 (' + Math.round(d.graceMs / 1000) + '秒)', 'warn');
+    showReconnectOverlay(true);
   });
   socket.on('publisherReconnected', function(d) {
     log('主播已重连 ' + peerTag(d.publisherId));
     peerNicknames[d.publisherId] = d.nickname;
+    showReconnectOverlay(false);
+    // Try to reconnect to the new publisher
+    if (myRole === 'viewer' && !primaryParentId) {
+      log('尝试连接到重连的主播...', 'warn');
+      primaryParentId = d.publisherId;
+      topologyMap.set(d.publisherId, {
+        peerId: d.publisherId, nickname: d.nickname, role: 'publisher',
+        parentId: null, backupParentIds: [], children: [],
+        linkTypes: {}, isReady: true, joinedAt: Date.now(),
+        fanoutMax: MAX_FANOUT, fanoutAvailable: MAX_FANOUT, updatedAt: Date.now()
+      });
+      connectToParent(d.publisherId, 'primary');
+    }
   });
   socket.on('peerJoined', function(d) {
     log('新节点加入: ' + peerTag(d.peerId) + ' (' + d.nickname + ')');
@@ -1611,7 +1630,16 @@ async function joinAsViewer() {
     password: document.getElementById('joinPassword').value,
     nickname: myNickname
   }, async function(res) {
-    if (res.error) return log('加入失败: ' + res.error, 'error');
+    if (res.error) {
+      log('加入失败: ' + res.error, 'error');
+      // If room doesn't exist or no host, show dialog and stay in lobby
+      if (res.error.indexOf('不存在') >= 0 || res.error.indexOf('无主播') >= 0) {
+        alert('房间不存在或主播已离开');
+      } else {
+        alert('加入失败: ' + res.error);
+      }
+      return;
+    }
     myPeerId = res.peerId;
     myRole = 'viewer';
     currentRoomId = roomId;
