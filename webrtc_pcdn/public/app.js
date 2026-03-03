@@ -72,8 +72,12 @@ function resetHealthState() { streamHealthState = { prevBytesReceived: 0, stallC
 var prevLogState = {
   connSummary: '',
   backupStatus: '',
-  gossipTargets: 0
+  gossipTargets: 0,
+  noBackupReason: ''
 };
+
+// Candidate counting for batch logging
+var candidateCounts = {}; // targetId:role -> count
 
 // Dedup
 var seenMsgIds = new Set();
@@ -543,7 +547,20 @@ function relaySdpSignal(targetId, data) {
   // First try direct socket relay (signaling server)
   if (socket && socket.connected) {
     socket.emit('signal', { targetId: targetId, data: data });
-    log('信令发送(socket): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole, 'debug');
+    // Batch candidate logs - only log offer/answer immediately, count candidates
+    if (sigType === 'candidate') {
+      var candKey = targetId + ':' + sigRole;
+      candidateCounts[candKey] = (candidateCounts[candKey] || 0) + 1;
+      // Don't log individual candidates
+    } else {
+      // Flush any pending candidate count for this target
+      var candKey = targetId + ':' + sigRole;
+      if (candidateCounts[candKey]) {
+        log('信令发送(socket): ' + candidateCounts[candKey] + ' candidates -> ' + peerTag(targetId) + ' role=' + sigRole, 'debug');
+        delete candidateCounts[candKey];
+      }
+      log('信令发送(socket): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole, 'debug');
+    }
     return;
   }
   // Fallback: relay through DataChannel
@@ -803,8 +820,12 @@ function maybeAdjustBackups() {
     return;
   }
 
-  log('备用连接不足: ' + current + '/' + desired + '，寻找新备用', 'debug');
-  prevLogState.backupStatus = current + '/' + desired + ':' + backupParents.join(',');
+  // Only log "不足" when status actually changes
+  var insufficientStatus = 'insufficient:' + current + '/' + desired;
+  if (insufficientStatus !== prevLogState.backupStatus) {
+    log('备用连接不足: ' + current + '/' + desired + '，寻找新备用', 'debug');
+  }
+  prevLogState.backupStatus = insufficientStatus;
 
   // Exclude: self, primary, existing backups, AND any peer whose backup is us
   // (prevents mutual backup: A backs up B while B backs up A — circular and useless)
@@ -856,7 +877,13 @@ function maybeAdjustBackups() {
   });
 
   if (filteredBackups.length === 0) {
-    log('无可用备用候选 (拓扑=' + topologyMap.size + '节点, 排除=' + excludeIds.length + ', 互备排除=' + mutualBackupExcluded.length + ')', 'debug');
+    var noBackupReason = 'topo=' + topologyMap.size + ',exclude=' + excludeIds.length + ',mutual=' + mutualBackupExcluded.length;
+    if (noBackupReason !== prevLogState.noBackupReason) {
+      log('无可用备用候选 (拓扑=' + topologyMap.size + '节点, 排除=' + excludeIds.length + ', 互备排除=' + mutualBackupExcluded.length + ')', 'debug');
+      prevLogState.noBackupReason = noBackupReason;
+    }
+  } else {
+    prevLogState.noBackupReason = ''; // Reset when we find backups
   }
 }
 
@@ -913,6 +940,12 @@ async function connectToParent(targetId, role) {
     if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
       pendingConnects.delete(key);
       detectLinkType(pc, targetId);
+      // Flush pending candidate count log
+      var candKey = targetId + ':' + role;
+      if (candidateCounts[candKey]) {
+        log('信令发送(socket): ' + candidateCounts[candKey] + ' candidates -> ' + peerTag(targetId) + ' role=' + role, 'debug');
+        delete candidateCounts[candKey];
+      }
       if (role === 'primary') showReconnectOverlay(false);
     }
     if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
