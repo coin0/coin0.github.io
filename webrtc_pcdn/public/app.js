@@ -119,10 +119,18 @@ function initSocket() {
     log('reassign前状态: primaryParentId='+(primaryParentId||'无')+' backupParentId='+(backupParentId||'无')+' conns='+connections.size);
     showReconnectOverlay(true);
     resetHealthState();
-    // Close old primary
-    if (primaryParentId) { closeConnByRole(primaryParentId, 'primary'); }
-    // Close old backup
-    if (backupParentId) { closeConnByRole(backupParentId, 'backup'); backupParentId = null; }
+    // Close ALL parent connections (primary + backup), not just current IDs
+    // This handles stale connections from previous parents
+    var toClose = [];
+    connections.forEach(function(conn, key) {
+      if (conn.role === 'primary' || conn.role === 'backup') toClose.push(key);
+    });
+    toClose.forEach(function(key) {
+      var conn = connections.get(key);
+      if (conn) { conn.pc.close(); connections.delete(key); }
+      pendingConnects.delete(key);
+    });
+    primaryParentId = null; backupParentId = null;
     receivedStream = null;
     if (!d.newParentId) { showReconnectOverlay(false); return; }
     primaryParentId = d.newParentId;
@@ -131,14 +139,24 @@ function initSocket() {
   });
   socket.on('promoteBackupToPrimary', async function(d) {
     log('收到promoteBackupToPrimary: newPrimaryId='+d.newPrimaryId.substring(0,8)+' 当前primary='+(primaryParentId||'无')+' 当前backup='+(backupParentId||'无'));
+
+    // Close the old primary connection first (it's dead anyway)
+    if (primaryParentId && primaryParentId !== d.newPrimaryId) {
+      log('关闭旧主连接: '+primaryParentId.substring(0,8));
+      closeConnByRole(primaryParentId, 'primary');
+    }
+
     var bc = getConn(d.newPrimaryId, 'backup');
     log('查找备用连接: key='+connKey(d.newPrimaryId,'backup')+' found='+(!!bc)+' bcRole='+(bc?bc.role:'N/A')+' bcIce='+(bc?bc.iceState:'N/A')+' bcStream='+(bc&&bc.stream?bc.stream.getTracks().length+'tracks':'null'));
     resetHealthState();
     if (bc && bc.role === 'backup') {
       // Re-key: delete backup key, set as primary key
       deleteConn(d.newPrimaryId, 'backup');
+      pendingConnects.delete(connKey(d.newPrimaryId, 'backup'));
       bc.role = 'primary';
       setConn(d.newPrimaryId, 'primary', bc);
+      // Mark as NOT pending — this connection is already established
+      pendingConnects.delete(connKey(d.newPrimaryId, 'primary'));
       primaryParentId = d.newPrimaryId; backupParentId = null;
       if (bc.stream && bc.stream.getTracks().length > 0) {
         receivedStream = bc.stream;
@@ -329,11 +347,18 @@ async function connectToParent(targetId, role) {
   // If existing connection is already connected/completed, skip
   var existing = getConn(targetId, role);
   if (existing) {
-    var existingState = existing.pc.iceConnectionState;
-    if (existingState === 'connected' || existingState === 'completed') {
-      log('跳过连接(已连接): ' + targetId.substring(0, 8) + ' role=' + role, 'warn');
+    var existingIce = existing.pc.iceConnectionState;
+    var existingSig = existing.pc.signalingState;
+    if (existingIce === 'connected' || existingIce === 'completed') {
+      log('跳过连接(已连接): ' + targetId.substring(0, 8) + ' role=' + role + ' ice=' + existingIce, 'warn');
       return;
     }
+    // Also skip if signaling is stable (answer already set) and ICE is checking
+    if (existingSig === 'stable' && (existingIce === 'checking' || existingIce === 'new')) {
+      log('跳过连接(信令已完成,等待ICE): ' + targetId.substring(0, 8) + ' role=' + role + ' ice=' + existingIce + ' sig=' + existingSig, 'warn');
+      return;
+    }
+    log('关闭旧连接并重建: ' + targetId.substring(0, 8) + ' role=' + role + ' ice=' + existingIce + ' sig=' + existingSig, 'warn');
     existing.pc.close();
     deleteConn(targetId, role);
   }
@@ -341,7 +366,7 @@ async function connectToParent(targetId, role) {
   pendingConnects.add(key);
   var config = getIceConfig();
   var pc = new RTCPeerConnection(config);
-  var ci = { pc:pc, role:role, dc:null, iceState:'new', stats:{}, stream:null, peerId:targetId };
+  var ci = { pc:pc, role:role, dc:null, iceState:'new', stats:{}, stream:null, peerId:targetId, createdAt:Date.now() };
   setConn(targetId, role, ci);
   pc.addTransceiver('video',{direction:'recvonly'}); pc.addTransceiver('audio',{direction:'recvonly'});
   var dc = pc.createDataChannel('chat',{ordered:true}); ci.dc = dc;
@@ -688,6 +713,28 @@ setInterval(function() {
   if (connSummary.length > 0) {
     console.log('[debug] 连接状态: role='+myRole+' primary='+(primaryParentId?primaryParentId.substring(0,8):'无')+' backup='+(backupParentId?backupParentId.substring(0,8):'无')+' pending=['+Array.from(pendingConnects).join(',')+'] conns=['+connSummary.join(', ')+']');
   }
+
+  // Cleanup stale connections: stuck at 'new' ICE state for >15s, or disconnected/failed for >10s
+  var now = Date.now();
+  var staleKeys = [];
+  connections.forEach(function(conn, key) {
+    if (conn.role === 'child') return; // don't clean up child connections here
+    var age = conn.createdAt ? (now - conn.createdAt) : 0;
+    if (conn.iceState === 'new' && age > 15000) {
+      staleKeys.push(key);
+    } else if ((conn.iceState === 'failed' || conn.iceState === 'closed') && age > 10000) {
+      staleKeys.push(key);
+    }
+  });
+  staleKeys.forEach(function(key) {
+    var conn = connections.get(key);
+    if (conn) {
+      log('清理过期连接: '+key+' iceState='+conn.iceState+' age='+Math.round((now-(conn.createdAt||0))/1000)+'s','warn');
+      conn.pc.close();
+      connections.delete(key);
+      pendingConnects.delete(key);
+    }
+  });
 
   connections.forEach(function(conn){
     if(!conn.pc||conn.pc.connectionState==='closed')return;
