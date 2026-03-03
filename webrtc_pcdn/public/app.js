@@ -480,6 +480,9 @@ function broadcastGossip() {
   myNodeState = createMyNodeState();
   topologyMap.set(myPeerId, myNodeState);
 
+  // Report fanout to server for better bootstrap node selection
+  reportFanoutToServer();
+
   var gossipMsg = {
     type: 'topology-gossip',
     version: gossipVersion,
@@ -510,6 +513,14 @@ function broadcastGossip() {
     log('Gossip广播 v' + gossipVersion + ' -> ' + gossipSentTo.length + '节点 topo=' + topologyMap.size, 'debug');
     prevLogState.gossipTargets = gossipSentTo.length;
   }
+}
+
+// Report fanout status to server for better bootstrap node selection
+function reportFanoutToServer() {
+  if (!socket || !socket.connected) return;
+  var childCount = getMyChildCount();
+  var fanoutAvailable = MAX_FANOUT - childCount;
+  socket.emit('reportFanout', { childCount: childCount, fanoutAvailable: fanoutAvailable });
 }
 
 function handleGossipMessage(msg, fromId) {
@@ -1781,9 +1792,23 @@ async function changeResolution() {
 // ============================================================
 // Viewer — Decentralized Join
 // ============================================================
+var isJoining = false; // Prevent duplicate join attempts
+
 async function joinAsViewer() {
   var roomId = document.getElementById('joinRoomInput').value.trim();
   if (!roomId) return alert('请输入房间号');
+  
+  // Prevent duplicate join attempts (e.g., double-click)
+  if (isJoining) {
+    log('正在加入中，请稍候...', 'warn');
+    return;
+  }
+  if (myRole === 'viewer' && currentRoomId === roomId) {
+    log('已在房间中', 'warn');
+    return;
+  }
+  
+  isJoining = true;
   myNickname = document.getElementById('viewerNickname').value.trim() || ('观众' + Math.floor(Math.random() * 1000));
   initSocket();
 
@@ -1792,6 +1817,8 @@ async function joinAsViewer() {
     password: document.getElementById('joinPassword').value,
     nickname: myNickname
   }, async function(res) {
+    isJoining = false; // Reset flag
+    
     if (res.error) {
       log('加入失败: ' + res.error, 'error');
       // If room doesn't exist or no host, show dialog and stay in lobby
@@ -1802,6 +1829,13 @@ async function joinAsViewer() {
       }
       return;
     }
+    
+    // Prevent processing if we already joined (race condition)
+    if (myRole === 'viewer' && currentRoomId === roomId && primaryParentId) {
+      log('已加入房间，忽略重复回调', 'warn');
+      return;
+    }
+    
     myPeerId = res.peerId;
     myRole = 'viewer';
     currentRoomId = roomId;
@@ -1843,25 +1877,54 @@ async function joinAsViewer() {
       }
     });
 
-    // Select best parent from bootstrap nodes
-    // Prefer non-publisher nodes if available (to distribute load)
-    // But always connect to publisher if it's the only option
+    // Select best parent from bootstrap nodes based on fanout availability
+    // Server now sends fanoutAvailable info, so we can make smarter choices
     var selectedParent = null;
-    var publisherNode = bootstrapNodes.find(function(n) { return n.isPublisher; });
-    var viewerNodes = bootstrapNodes.filter(function(n) { return !n.isPublisher; });
     
-    if (viewerNodes.length > 0) {
-      // Try a random viewer node first (they might have fanout available)
-      var randomIdx = Math.floor(Math.random() * viewerNodes.length);
-      selectedParent = viewerNodes[randomIdx];
-      log('选择非主播节点作为初始父节点: ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (分散负载)');
-    } else if (publisherNode) {
-      // Only publisher available
-      selectedParent = publisherNode;
-      log('仅主播可用，连接到主播');
-    } else {
-      selectedParent = bootstrapNodes[0];
+    // Sort bootstrap nodes by fanout availability (higher first)
+    var sortedNodes = bootstrapNodes.slice().sort(function(a, b) {
+      var aFanout = a.fanoutAvailable !== undefined ? a.fanoutAvailable : MAX_FANOUT;
+      var bFanout = b.fanoutAvailable !== undefined ? b.fanoutAvailable : MAX_FANOUT;
+      // Prefer nodes with available fanout
+      if (aFanout > 0 && bFanout <= 0) return -1;
+      if (bFanout > 0 && aFanout <= 0) return 1;
+      // Among nodes with fanout, prefer non-publisher (to distribute load from root)
+      if (aFanout > 0 && bFanout > 0) {
+        if (!a.isPublisher && b.isPublisher) return -1;
+        if (a.isPublisher && !b.isPublisher) return 1;
+      }
+      return bFanout - aFanout;
+    });
+    
+    // Log bootstrap node fanout info for debugging
+    log('引导节点: ' + sortedNodes.map(function(n) {
+      return peerTag(n.peerId || n.socketId) + '(fanout=' + (n.fanoutAvailable !== undefined ? n.fanoutAvailable : '?') + (n.isPublisher ? ',pub' : '') + ')';
+    }).join(', '), 'debug');
+    
+    // Select first node with available fanout
+    for (var i = 0; i < sortedNodes.length; i++) {
+      var node = sortedNodes[i];
+      var fanout = node.fanoutAvailable !== undefined ? node.fanoutAvailable : MAX_FANOUT;
+      if (fanout > 0) {
+        selectedParent = node;
+        break;
+      }
     }
+    
+    // Fallback to first node if all are at capacity (will get rejected and retry)
+    if (!selectedParent && sortedNodes.length > 0) {
+      selectedParent = sortedNodes[0];
+      log('所有节点已满，尝试连接 ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (可能被拒绝)', 'warn');
+    }
+    
+    if (!selectedParent) {
+      log('无可用引导节点', 'error');
+      return;
+    }
+    
+    var parentType = selectedParent.isPublisher ? '主播' : '观众';
+    var parentFanout = selectedParent.fanoutAvailable !== undefined ? selectedParent.fanoutAvailable : '?';
+    log('选择 ' + parentType + ' 作为初始父节点: ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (fanout=' + parentFanout + ')');
     
     primaryParentId = selectedParent.peerId || selectedParent.socketId;
     peerNicknames[primaryParentId] = selectedParent.nickname;
@@ -1898,11 +1961,17 @@ function leaveRoom() {
 function optimizeParentIfBetter() {
   if (myRole !== 'viewer' || !primaryParentId) return;
 
-  // Never migrate away from the publisher — it's always the best root
   var currentNs = topologyMap.get(primaryParentId);
+  
+  // If connected to publisher and publisher has capacity, stay (it's the root)
+  // But if publisher is at capacity, we should migrate to help distribute load
   if (currentNs && currentNs.role === 'publisher') {
-    // Skip logging - this is the expected stable state
-    return;
+    if (currentNs.fanoutAvailable > 0) {
+      // Publisher has capacity, stay connected
+      return;
+    }
+    // Publisher is at capacity - check if there's a better option
+    log('主播已满(fanout=' + currentNs.fanoutAvailable + ')，检查是否有更优父节点...', 'debug');
   }
 
   var currentScore = parentScore(currentNs, primaryParentId, true); // true = is current parent
@@ -2578,6 +2647,7 @@ function cleanup() {
   currentRoomId = null; currentRoomPwd = null;
   if (socket) { socket.disconnect(); socket = null; }
   myRole = null; myPeerId = null; myNodeState = null;
+  isJoining = false; // Reset join flag
 }
 
 window.addEventListener('resize', function() {

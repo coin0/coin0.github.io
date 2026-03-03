@@ -70,6 +70,7 @@ const HEARTBEAT_TIMEOUT_MS = 30000; // remove node if no heartbeat for 30s
 const MAX_BOOTSTRAP_NODES = 6;
 
 const rooms = {};
+const MAX_FANOUT = 2; // Must match client-side MAX_FANOUT
 
 function getRoom(roomId) {
   if (!rooms[roomId]) {
@@ -79,7 +80,7 @@ function getRoom(roomId) {
       publisherGraceTimer: null,
       title: '',
       password: '',
-      activeNodes: new Map(),   // socketId -> { peerId, nickname, lastSeen, socketId }
+      activeNodes: new Map(),   // socketId -> { peerId, nickname, lastSeen, socketId, childCount, fanoutAvailable }
       chatHistory: [],
     };
   }
@@ -87,35 +88,77 @@ function getRoom(roomId) {
 }
 
 // Return up to N bootstrap nodes (prefer publisher + mix of recently active)
+// Phase 4 enhancement: prioritize nodes with available fanout capacity
 function getBootstrapNodes(room, excludeSocketId) {
   const nodes = [];
-  // Always include publisher first if online (they're the root of the tree)
+  
+  // Collect all candidate nodes with their fanout info
+  const candidates = [];
+  
+  // Add publisher if online
   if (room.publisher && !room.publisherOffline && room.publisher.socketId !== excludeSocketId) {
-    nodes.push({ peerId: room.publisher.peerId, socketId: room.publisher.socketId, nickname: room.publisher.nickname, isPublisher: true });
+    const pubInfo = room.activeNodes.get(room.publisher.socketId);
+    const fanoutAvailable = pubInfo ? (pubInfo.fanoutAvailable !== undefined ? pubInfo.fanoutAvailable : MAX_FANOUT) : MAX_FANOUT;
+    candidates.push({ 
+      peerId: room.publisher.peerId, 
+      socketId: room.publisher.socketId, 
+      nickname: room.publisher.nickname, 
+      isPublisher: true,
+      fanoutAvailable: fanoutAvailable,
+      lastSeen: pubInfo ? pubInfo.lastSeen : Date.now()
+    });
   }
-  // Add other active nodes sorted by lastSeen (most recent first)
-  const others = [];
+  
+  // Add other active nodes
   for (const [sid, info] of room.activeNodes) {
     if (sid === excludeSocketId) continue;
     if (room.publisher && sid === room.publisher.socketId) continue; // already added
-    others.push(info);
+    const fanoutAvailable = info.fanoutAvailable !== undefined ? info.fanoutAvailable : MAX_FANOUT;
+    candidates.push({
+      peerId: info.peerId,
+      socketId: info.socketId,
+      nickname: info.nickname,
+      isPublisher: false,
+      fanoutAvailable: fanoutAvailable,
+      lastSeen: info.lastSeen
+    });
   }
-  others.sort((a, b) => b.lastSeen - a.lastSeen);
   
-  // If we have enough other nodes, shuffle them to distribute load
-  // This helps new viewers connect to different parents instead of all hitting the publisher
-  if (others.length > 2) {
-    // Fisher-Yates shuffle for the first few elements
-    for (let i = Math.min(others.length - 1, 5); i > 0; i--) {
+  // Sort candidates: prioritize nodes with available fanout, then by recency
+  candidates.sort((a, b) => {
+    // First: nodes with fanout > 0 come before nodes with fanout = 0
+    if (a.fanoutAvailable > 0 && b.fanoutAvailable <= 0) return -1;
+    if (b.fanoutAvailable > 0 && a.fanoutAvailable <= 0) return 1;
+    // Second: among nodes with fanout, prefer higher fanout
+    if (a.fanoutAvailable !== b.fanoutAvailable) return b.fanoutAvailable - a.fanoutAvailable;
+    // Third: prefer more recent nodes
+    return b.lastSeen - a.lastSeen;
+  });
+  
+  // Take top candidates, but shuffle a bit to distribute load
+  const topCandidates = candidates.slice(0, MAX_BOOTSTRAP_NODES);
+  if (topCandidates.length > 2) {
+    // Shuffle among nodes with similar fanout to distribute load
+    for (let i = Math.min(topCandidates.length - 1, 4); i > 0; i--) {
+      // Only shuffle if fanout is similar (within 1)
       const j = Math.floor(Math.random() * (i + 1));
-      [others[i], others[j]] = [others[j], others[i]];
+      if (Math.abs(topCandidates[i].fanoutAvailable - topCandidates[j].fanoutAvailable) <= 1) {
+        [topCandidates[i], topCandidates[j]] = [topCandidates[j], topCandidates[i]];
+      }
     }
   }
   
-  for (const n of others) {
-    if (nodes.length >= MAX_BOOTSTRAP_NODES) break;
-    nodes.push({ peerId: n.peerId, socketId: n.socketId, nickname: n.nickname, isPublisher: false });
+  // Build result
+  for (const c of topCandidates) {
+    nodes.push({ 
+      peerId: c.peerId, 
+      socketId: c.socketId, 
+      nickname: c.nickname, 
+      isPublisher: c.isPublisher,
+      fanoutAvailable: c.fanoutAvailable
+    });
   }
+  
   return nodes;
 }
 
@@ -165,7 +208,7 @@ io.on('connection', (socket) => {
       room.activeNodes.delete(oldSocketId);
       room.publisher = { peerId: socket.id, socketId: socket.id, nickname: nickname || '主播', createdAt: Date.now() };
       room.publisherOffline = false;
-      room.activeNodes.set(socket.id, { peerId: socket.id, socketId: socket.id, nickname: nickname || '主播', lastSeen: Date.now() });
+      room.activeNodes.set(socket.id, { peerId: socket.id, socketId: socket.id, nickname: nickname || '主播', lastSeen: Date.now(), childCount: 0, fanoutAvailable: MAX_FANOUT });
       socket.join(roomId);
       currentRoom = roomId; currentRole = 'publisher';
       console.log(`[publisher-reconnect] ${socket.id} room=${roomId}`);
@@ -184,7 +227,7 @@ io.on('connection', (socket) => {
     room.publisherOffline = false;
     room.title = title || roomId;
     room.password = password || '';
-    room.activeNodes.set(socket.id, { peerId: socket.id, socketId: socket.id, nickname: nickname || '主播', lastSeen: Date.now() });
+    room.activeNodes.set(socket.id, { peerId: socket.id, socketId: socket.id, nickname: nickname || '主播', lastSeen: Date.now(), childCount: 0, fanoutAvailable: MAX_FANOUT });
     socket.join(roomId);
     currentRoom = roomId; currentRole = 'publisher';
     console.log(`[createRoom] ${socket.id} room=${roomId}`);
@@ -199,12 +242,13 @@ io.on('connection', (socket) => {
     if (room.password && room.password !== password) return callback({ error: '房间密码错误' });
 
     const nick = nickname || `观众${socket.id.substring(0, 4)}`;
-    room.activeNodes.set(socket.id, { peerId: socket.id, socketId: socket.id, nickname: nick, lastSeen: Date.now() });
+    room.activeNodes.set(socket.id, { peerId: socket.id, socketId: socket.id, nickname: nick, lastSeen: Date.now(), childCount: 0, fanoutAvailable: MAX_FANOUT });
     socket.join(roomId);
     currentRoom = roomId; currentRole = 'viewer';
 
     const bootstrapNodes = getBootstrapNodes(room, socket.id);
-    console.log(`[joinRoom] ${socket.id} room=${roomId} bootstraps=${bootstrapNodes.length}`);
+    const bootstrapInfo = bootstrapNodes.map(n => `${n.socketId.substring(0,8)}(f=${n.fanoutAvailable}${n.isPublisher ? ',pub' : ''})`).join(', ');
+    console.log(`[joinRoom] ${socket.id} room=${roomId} bootstraps=${bootstrapNodes.length} [${bootstrapInfo}]`);
     callback({
       success: true, peerId: socket.id,
       bootstrapNodes,
@@ -268,6 +312,19 @@ io.on('connection', (socket) => {
     callback({ success: true, bootstrapNodes, publisherOffline: room.publisherOffline });
   });
 
+  // ---- Report Fanout Status (for load balancing) ----
+  socket.on('reportFanout', ({ childCount, fanoutAvailable }) => {
+    if (!currentRoom || !rooms[currentRoom]) return;
+    const room = rooms[currentRoom];
+    const info = room.activeNodes.get(socket.id);
+    if (info) {
+      info.childCount = childCount;
+      info.fanoutAvailable = fanoutAvailable;
+      info.lastSeen = Date.now();
+      // console.log(`[reportFanout] ${socket.id} children=${childCount} fanout=${fanoutAvailable}`);
+    }
+  });
+
   // ---- Disconnect ----
   socket.on('disconnect', (reason) => {
     console.log(`[disconnect] ${socket.id} reason=${reason} room=${currentRoom} role=${currentRole}`);
@@ -327,7 +384,8 @@ setInterval(() => {
     const nodeList = [];
     for (const [sid, info] of r.activeNodes) {
       const age = Math.round((Date.now() - info.lastSeen) / 1000);
-      nodeList.push(`${sid.substring(0,8)}(${info.nickname},${age}s ago)`);
+      const fanout = info.fanoutAvailable !== undefined ? info.fanoutAvailable : '?';
+      nodeList.push(`${sid.substring(0,8)}(${info.nickname},f=${fanout},${age}s)`);
     }
     console.log(`[room-state] ${rid}: pub=${pubStatus} nodes=${r.activeNodes.size} [${nodeList.join(', ')}]`);
   });
