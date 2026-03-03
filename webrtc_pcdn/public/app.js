@@ -65,10 +65,13 @@ function getIceConfig() {
 function log(msg, level) {
   level = level || 'info';
   var area = document.getElementById('logArea');
+  if (!area) { console.log('[' + level + '] ' + msg); return; }
   var entry = document.createElement('div');
   entry.className = 'log-entry ' + level;
   entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
   area.appendChild(entry);
+  // Keep log area from growing unbounded — trim old entries
+  while (area.childNodes.length > 500) area.removeChild(area.firstChild);
   area.parentElement.scrollTop = area.parentElement.scrollHeight;
   console.log('[' + level + '] ' + msg);
 }
@@ -794,13 +797,13 @@ async function triggerStreamFailover() {
 setInterval(function() {
   if(!socket||!myPeerId)return;
 
-  // Periodic connection state dump (every cycle, but only to console for debugging)
+  // Periodic connection state dump
   var connSummary = [];
   connections.forEach(function(conn, key) {
-    connSummary.push(key + '=' + conn.iceState + '/' + conn.pc.signalingState);
+    connSummary.push(key.split(':').map(function(p,i){return i===0?p.substring(0,8):p;}).join(':') + '=' + conn.iceState + '/' + conn.pc.signalingState);
   });
   if (connSummary.length > 0) {
-    console.log('[debug] 连接状态: role='+myRole+' primary='+(primaryParentId?primaryParentId.substring(0,8):'无')+' backup='+(backupParentId?backupParentId.substring(0,8):'无')+' pending=['+Array.from(pendingConnects).join(',')+'] conns=['+connSummary.join(', ')+']');
+    log('连接状态: role='+myRole+' primary='+(primaryParentId?primaryParentId.substring(0,8):'无')+' backup='+(backupParentId?backupParentId.substring(0,8):'无')+' pending='+pendingConnects.size+' conns=['+connSummary.join(', ')+']', 'debug');
   }
 
   // Cleanup stale connections: stuck at 'new' ICE state for >15s, or disconnected/failed for >10s
