@@ -1307,6 +1307,35 @@ async function handleSignal(fromId, data) {
       }
     }
 
+    // Fanout limit check: reject if we're at capacity
+    // Count current child connections (excluding the one we might be replacing)
+    var currentChildCount = 0;
+    connections.forEach(function(ci, key) {
+      if (ci.role === 'child' && ci.peerId !== fromId) {
+        // Only count active or pending connections
+        if (ci.iceState === 'connected' || ci.iceState === 'completed' || ci.iceState === 'checking' || ci.iceState === 'new') {
+          currentChildCount++;
+        }
+      }
+    });
+    
+    if (currentChildCount >= MAX_FANOUT) {
+      // At capacity - find alternative parents for the requester
+      var alternativeParents = [];
+      topologyMap.forEach(function(ns, pid) {
+        if (pid === myPeerId || pid === fromId) return;
+        if (ns.isReady && ns.fanoutAvailable > 0) {
+          alternativeParents.push(peerTag(pid));
+        }
+      });
+      
+      // Always reject when at capacity - this enforces proper tree distribution
+      log('拒绝offer(扇出已满): ' + peerTag(fromId) + ' 当前子节点=' + currentChildCount + '/' + MAX_FANOUT + ' 可选父节点=[' + alternativeParents.slice(0, 3).join(',') + ']', 'warn');
+      // Send rejection message so the requester knows to try elsewhere
+      relaySdpSignal(fromId, { type: 'reject', reason: 'fanout-full', connRole: childTag, alternatives: alternativeParents.slice(0, 5) });
+      return;
+    }
+
     log('收到 offer from ' + peerTag(fromId) + ' (角色:' + childTag + ', key=' + connKey(fromId, ourKey) + ')');
 
     var existingChild = getConn(fromId, ourKey);
@@ -1330,6 +1359,12 @@ async function handleSignal(fromId, data) {
       else { ci.disconnectedAt = null; }
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
         detectLinkType(pc, fromId);
+        // Broadcast updated fanout availability immediately
+        broadcastGossip();
+      }
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
+        // Child disconnected - broadcast updated fanout availability
+        broadcastGossip();
       }
       updateIceStatusUI();
     };
@@ -1407,6 +1442,83 @@ async function handleSignal(fromId, data) {
       }
     } else {
       log('ICE候选丢弃: 找不到连接 ' + peerTag(fromId) + ' role=' + cRole, 'warn');
+    }
+
+  } else if (data.type === 'reject') {
+    // Our connection request was rejected (e.g., target at fanout capacity)
+    var rejRole = data.connRole || 'primary';
+    log('连接被拒绝: ' + peerTag(fromId) + ' role=' + rejRole + ' reason=' + data.reason, 'warn');
+    
+    // Close the pending connection
+    var rejConn = getConn(fromId, rejRole);
+    if (rejConn) {
+      rejConn.pc.close();
+      deleteConn(fromId, rejRole);
+    }
+    pendingConnects.delete(connKey(fromId, rejRole));
+    
+    // If this was our primary, try to find an alternative
+    if (rejRole === 'primary' && fromId === primaryParentId) {
+      primaryParentId = null;
+      log('主连接被拒绝，寻找替代父节点...', 'warn');
+      
+      // Try alternatives suggested by the rejecting peer
+      if (data.alternatives && data.alternatives.length > 0) {
+        // Find the first alternative that's in our topology and has fanout
+        for (var i = 0; i < data.alternatives.length; i++) {
+          var altTag = data.alternatives[i];
+          // Extract peerId from tag (format: "shortId(nickname)" or just "shortId")
+          var altId = null;
+          topologyMap.forEach(function(ns, pid) {
+            if (peerTag(pid) === altTag || pid.indexOf(altTag.split('(')[0]) === 0) {
+              if (ns.isReady && ns.fanoutAvailable > 0) altId = pid;
+            }
+          });
+          if (altId) {
+            log('尝试替代父节点: ' + peerTag(altId));
+            primaryParentId = altId;
+            connectToParent(altId, 'primary');
+            return;
+          }
+        }
+      }
+      
+      // No suggested alternatives worked, use normal parent selection
+      var excludeIds = [myPeerId, fromId];
+      var newParent = selectBestParent(excludeIds);
+      if (newParent) {
+        primaryParentId = newParent;
+        log('选择新主父节点: ' + peerTag(newParent));
+        connectToParent(newParent, 'primary');
+      } else {
+        // No parent available - wait for topology update and retry
+        log('无可用父节点，等待拓扑更新后重试...', 'warn');
+        showReconnectOverlay(true);
+        setTimeout(function() {
+          if (!primaryParentId) {
+            // Try again after getting more topology info
+            var retryParent = selectBestParent([myPeerId]);
+            if (retryParent) {
+              primaryParentId = retryParent;
+              log('重试连接到: ' + peerTag(retryParent));
+              connectToParent(retryParent, 'primary');
+              showReconnectOverlay(false);
+            } else {
+              // Still no parent - request fresh bootstrap from server
+              log('仍无可用父节点，请求新引导节点...', 'warn');
+              requestNewBootstrapAndReconnect();
+            }
+          }
+        }, 3000);
+      }
+    }
+    
+    // If this was a backup, try to find another backup
+    var backupIdx = backupParents.indexOf(fromId);
+    if (backupIdx >= 0) {
+      backupParents.splice(backupIdx, 1);
+      log('备用连接被拒绝，寻找替代...', 'warn');
+      maybeAdjustBackups();
     }
   }
 }
@@ -1667,11 +1779,42 @@ async function joinAsViewer() {
       return;
     }
 
-    // Connect to first bootstrap node as primary (usually publisher)
-    // After getting topology via DC, we may optimize later
-    var firstBoot = bootstrapNodes[0];
-    primaryParentId = firstBoot.peerId || firstBoot.socketId;
-    peerNicknames[primaryParentId] = firstBoot.nickname;
+    // Seed topology with bootstrap nodes info
+    bootstrapNodes.forEach(function(node) {
+      var pid = node.peerId || node.socketId;
+      peerNicknames[pid] = node.nickname;
+      if (!topologyMap.has(pid)) {
+        topologyMap.set(pid, {
+          peerId: pid, nickname: node.nickname, role: node.isPublisher ? 'publisher' : 'viewer',
+          parentId: null, backupParentIds: [], children: [],
+          linkTypes: {}, isReady: true, joinedAt: Date.now(),
+          fanoutMax: MAX_FANOUT, fanoutAvailable: MAX_FANOUT, updatedAt: Date.now()
+        });
+      }
+    });
+
+    // Select best parent from bootstrap nodes
+    // Prefer non-publisher nodes if available (to distribute load)
+    // But always connect to publisher if it's the only option
+    var selectedParent = null;
+    var publisherNode = bootstrapNodes.find(function(n) { return n.isPublisher; });
+    var viewerNodes = bootstrapNodes.filter(function(n) { return !n.isPublisher; });
+    
+    if (viewerNodes.length > 0) {
+      // Try a random viewer node first (they might have fanout available)
+      var randomIdx = Math.floor(Math.random() * viewerNodes.length);
+      selectedParent = viewerNodes[randomIdx];
+      log('选择非主播节点作为初始父节点: ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (分散负载)');
+    } else if (publisherNode) {
+      // Only publisher available
+      selectedParent = publisherNode;
+      log('仅主播可用，连接到主播');
+    } else {
+      selectedParent = bootstrapNodes[0];
+    }
+    
+    primaryParentId = selectedParent.peerId || selectedParent.socketId;
+    peerNicknames[primaryParentId] = selectedParent.nickname;
 
     document.getElementById('viewerStatus').innerHTML = '<span>' + myNickname + '</span> | 主: <span>' + peerTag(primaryParentId) + '</span>';
 

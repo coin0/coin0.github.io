@@ -86,10 +86,10 @@ function getRoom(roomId) {
   return rooms[roomId];
 }
 
-// Return up to N bootstrap nodes (prefer publisher + recently active)
+// Return up to N bootstrap nodes (prefer publisher + mix of recently active)
 function getBootstrapNodes(room, excludeSocketId) {
   const nodes = [];
-  // Always include publisher first if online
+  // Always include publisher first if online (they're the root of the tree)
   if (room.publisher && !room.publisherOffline && room.publisher.socketId !== excludeSocketId) {
     nodes.push({ peerId: room.publisher.peerId, socketId: room.publisher.socketId, nickname: room.publisher.nickname, isPublisher: true });
   }
@@ -101,6 +101,17 @@ function getBootstrapNodes(room, excludeSocketId) {
     others.push(info);
   }
   others.sort((a, b) => b.lastSeen - a.lastSeen);
+  
+  // If we have enough other nodes, shuffle them to distribute load
+  // This helps new viewers connect to different parents instead of all hitting the publisher
+  if (others.length > 2) {
+    // Fisher-Yates shuffle for the first few elements
+    for (let i = Math.min(others.length - 1, 5); i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [others[i], others[j]] = [others[j], others[i]];
+    }
+  }
+  
   for (const n of others) {
     if (nodes.length >= MAX_BOOTSTRAP_NODES) break;
     nodes.push({ peerId: n.peerId, socketId: n.socketId, nickname: n.nickname, isPublisher: false });
