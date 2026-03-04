@@ -869,7 +869,7 @@ function requestNewBootstrapAndReconnect() {
       // Check if room/publisher is gone
       if (res.error.indexOf('不存在') >= 0 || res.error.indexOf('无主播') >= 0) {
         log('主播已离开房间: ' + res.error, 'warn');
-        alert('直播已结束');
+        alert(t('liveEnded'));
         cleanup();
         switchTab('lobby');
         return;
@@ -950,7 +950,7 @@ function initSocket() {
   socket.on('roomList', function(list) { renderRoomList(list); });
   socket.on('roomClosed', function() {
     log('房间已关闭，主播已离开', 'warn');
-    alert('直播已结束，主播已离开房间');
+    alert(t('liveEndedFull'));
     cleanup();
     switchTab('lobby');
   });
@@ -1707,8 +1707,8 @@ function replaceTracksOnChildren(newStream) {
 // ============================================================
 async function startPublish() {
   var roomId = document.getElementById('roomIdInput').value.trim();
-  if (!roomId) return alert('请输入房间号');
-  myNickname = document.getElementById('pubNickname').value.trim() || '主播';
+  if (!roomId) return alert(t('enterRoomId'));
+  myNickname = document.getElementById('pubNickname').value.trim() || t('defaultPublisher');
   initSocket();
   try {
     localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
@@ -1738,7 +1738,7 @@ async function startPublish() {
     log('房间 ' + roomId + ' 创建成功' + (res.reconnected ? ' (重连)' : ''));
     document.getElementById('publisherArea').style.display = '';
     document.getElementById('noLiveArea').style.display = 'none';
-    document.getElementById('publisherStatus').innerHTML = '房间: <span>' + roomId + '</span> | <span>' + myNickname + '</span>';
+    document.getElementById('publisherStatus').innerHTML = t('roomLabel') + ': <span>' + roomId + '</span> | <span>' + myNickname + '</span>';
     switchTab('live');
     startPeriodicTasks();
   });
@@ -1780,7 +1780,7 @@ async function toggleScreenShare() {
     st.onended = function() { stopScreenShare(); };
     isScreenSharing = true;
     document.getElementById('screenShareBanner').style.display = '';
-    document.getElementById('btnScreenShare').textContent = '📷 恢复摄像头';
+    document.getElementById('btnScreenShare').textContent = t('screenShareRestore');
     log('已开始屏幕共享');
   } catch(e) { log('屏幕共享失败: ' + e.message, 'error'); }
 }
@@ -1805,7 +1805,7 @@ async function stopScreenShare() {
   });
   savedCameraTrack = null; isScreenSharing = false;
   document.getElementById('screenShareBanner').style.display = 'none';
-  document.getElementById('btnScreenShare').textContent = '🖥️ 共享屏幕';
+  document.getElementById('btnScreenShare').textContent = t('screenShare');
   log('已停止屏幕共享');
 }
 
@@ -1825,7 +1825,7 @@ var isJoining = false; // Prevent duplicate join attempts
 
 async function joinAsViewer() {
   var roomId = document.getElementById('joinRoomInput').value.trim();
-  if (!roomId) return alert('请输入房间号');
+  if (!roomId) return alert(t('enterRoomId'));
   
   // Prevent duplicate join attempts (e.g., double-click)
   if (isJoining) {
@@ -1838,7 +1838,7 @@ async function joinAsViewer() {
   }
   
   isJoining = true;
-  myNickname = document.getElementById('viewerNickname').value.trim() || ('观众' + Math.floor(Math.random() * 1000));
+  myNickname = document.getElementById('viewerNickname').value.trim() || (t('defaultViewer') + Math.floor(Math.random() * 1000));
   initSocket();
 
   socket.emit('joinRoom', {
@@ -1852,9 +1852,9 @@ async function joinAsViewer() {
       log('加入失败: ' + res.error, 'error');
       // If room doesn't exist or no host, show dialog and stay in lobby
       if (res.error.indexOf('不存在') >= 0 || res.error.indexOf('无主播') >= 0) {
-        alert('房间不存在或主播已离开');
+        alert(t('roomNotExist'));
       } else {
-        alert('加入失败: ' + res.error);
+        alert(t('joinFailed') + res.error);
       }
       return;
     }
@@ -1958,7 +1958,7 @@ async function joinAsViewer() {
     primaryParentId = selectedParent.peerId || selectedParent.socketId;
     peerNicknames[primaryParentId] = selectedParent.nickname;
 
-    document.getElementById('viewerStatus').innerHTML = '<span>' + myNickname + '</span> | 主: <span>' + peerTag(primaryParentId) + '</span>';
+    document.getElementById('viewerStatus').innerHTML = '<span>' + myNickname + '</span> | ' + t('primaryLabel') + ': <span>' + peerTag(primaryParentId) + '</span>';
 
     await connectToParent(primaryParentId, 'primary');
 
@@ -2205,9 +2205,9 @@ function startPeriodicTasks() {
     if (myRole === 'viewer') {
       var el = document.getElementById('viewerStatus');
       if (el) {
-        el.innerHTML = '<span>' + myNickname + '</span> | 主: <span>' + peerTag(primaryParentId) + '</span>' +
-          (backupParents.length > 0 ? ' | 备: <span>' + backupParents.map(peerTag).join(', ') + '</span>' : '') +
-          ' | 拓扑: <span>' + topologyMap.size + '节点</span>';
+        el.innerHTML = '<span>' + myNickname + '</span> | ' + t('primaryLabel') + ': <span>' + peerTag(primaryParentId) + '</span>' +
+          (backupParents.length > 0 ? ' | ' + t('backupLabel') + ': <span>' + backupParents.map(peerTag).join(', ') + '</span>' : '') +
+          ' | ' + t('topoLabel') + ': <span>' + topologyMap.size + t('nodesLabel') + '</span>';
       }
     }
   }, 5000));
@@ -2219,7 +2219,7 @@ function checkRoomStatus() {
     var roomExists = list.some(function(r) { return r.roomId === currentRoomId; });
     if (!roomExists) {
       log('房间已不存在，主播已离开', 'warn');
-      alert('直播已结束');
+      alert(t('liveEnded'));
       cleanup();
       switchTab('lobby');
     }
@@ -2349,7 +2349,7 @@ function showCopyToast(count) {
   if (existing) existing.remove();
   var toast = document.createElement('div');
   toast.id = 'copyToast';
-  toast.textContent = '✅ 已复制 ' + count + ' 条日志';
+  toast.textContent = t('copiedLogs').replace('{0}', count);
   toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a2e;color:#0f9;border:1px solid #0f9;padding:8px 20px;border-radius:6px;font-size:14px;z-index:99999;pointer-events:none;opacity:1;transition:opacity 0.5s';
   document.body.appendChild(toast);
   setTimeout(function() { toast.style.opacity = '0'; }, 1500);
@@ -2401,7 +2401,7 @@ function updateIceStatusUI() {
       var tag = conn.childTag ? '(' + conn.childTag + ')' : '';
       html += '<div class="ice-badge" style="background:' + color + '22;color:' + color + '"><span class="dot" style="background:' + color + '"></span>↓子 ' + peerTag(conn.peerId) + ' ' + tag + ' ' + st + linkLabel + '</div>';
     });
-    hc.innerHTML = childCount > 0 ? html : '<span style="color:var(--muted);font-size:12px">暂无子节点</span>';
+    hc.innerHTML = childCount > 0 ? html : '<span style="color:var(--muted);font-size:12px">' + t('noChildNodes') + '</span>';
   }
 }
 
@@ -2447,12 +2447,12 @@ function getMaxTreeDepth() {
 // ============================================================
 function renderRoomList(list) {
   var c = document.getElementById('roomList');
-  if (!list || list.length === 0) { c.innerHTML = '<div style="color:var(--muted);font-size:13px">暂无直播房间</div>'; return; }
+  if (!list || list.length === 0) { c.innerHTML = '<div style="color:var(--muted);font-size:13px">' + t('noRooms') + '</div>'; return; }
   c.innerHTML = '';
   list.forEach(function(r) {
     var card = document.createElement('div'); card.className = 'room-card';
-    var off = r.publisherOffline ? ' <span style="color:#f90">⚠️离线</span>' : '';
-    card.innerHTML = '<div class="room-title">' + (r.hasPassword ? '🔒 ' : '') + escHtml(r.title) + off + '</div><div class="room-meta">主播: ' + escHtml(r.publisherName) + ' · 👥 ' + r.viewerCount + '</div>';
+    var off = r.publisherOffline ? ' <span style="color:#f90">' + t('roomCardOffline') + '</span>' : '';
+    card.innerHTML = '<div class="room-title">' + (r.hasPassword ? '🔒 ' : '') + escHtml(r.title) + off + '</div><div class="room-meta">' + t('roomCardHost') + ': ' + escHtml(r.publisherName) + ' · 👥 ' + r.viewerCount + '</div>';
     card.onclick = function() { document.getElementById('joinRoomInput').value = r.roomId; };
     c.appendChild(card);
   });
@@ -2472,16 +2472,16 @@ function showRemoteVideo(peerId, stream) {
     });
   }
   var btn = document.getElementById('btnUnmute');
-  if (btn) btn.textContent = v.muted ? '🔊 开启声音' : '🔇 静音';
+  if (btn) btn.textContent = v.muted ? t('unmute') : t('mute');
   var l = document.getElementById('remoteVideoLabel');
-  if (l) l.innerHTML = '连接自: <span style="color:var(--accent2)">' + peerTag(peerId) + '</span>';
+  if (l) l.innerHTML = t('connectedFrom') + ': <span style="color:var(--accent2)">' + peerTag(peerId) + '</span>';
 }
 
 function unmuteVideo() {
   var v = document.getElementById('remoteVideo'); if (!v) return;
   v.muted = !v.muted;
   var btn = document.getElementById('btnUnmute');
-  if (btn) btn.textContent = v.muted ? '🔊 开启声音' : '🔇 静音';
+  if (btn) btn.textContent = v.muted ? t('unmute') : t('mute');
   if (!v.muted) v.play().catch(function() {});
 }
 
@@ -2649,7 +2649,7 @@ document.addEventListener('click', function(e) {
   }
   if (!found) { if (detail) detail.style.display = 'none'; return; }
   detail.style.display = ''; detail.style.left = (e.clientX + 10) + 'px'; detail.style.top = (e.clientY + 10) + 'px';
-  document.getElementById('nodeDetailTitle').textContent = found.role === 'publisher' ? '📡 主播节点' : '👤 观众节点';
+  document.getElementById('nodeDetailTitle').textContent = found.role === 'publisher' ? t('publisherNode') : t('viewerNode');
   var ns = topologyMap.get(found.id);
   var li = linkInfo.get(found.id);
   var conn = findConnByPeer(found.id);
@@ -2657,22 +2657,22 @@ document.addEventListener('click', function(e) {
   var statsHtml = '';
   if (conn && conn.stats && conn.stats.rtt) {
     statsHtml = '<div class="detail-row">RTT: <span>' + Math.round(conn.stats.rtt) + 'ms</span></div>' +
-      '<div class="detail-row">丢包: <span>' + (conn.stats.packetLoss || 0) + '</span></div>';
+      '<div class="detail-row">' + t('detailLoss') + ': <span>' + (conn.stats.packetLoss || 0) + '</span></div>';
   }
   document.getElementById('nodeDetailBody').innerHTML =
     '<div class="detail-row">Peer ID: <span>' + found.id.substring(0, 12) + '...</span></div>' +
-    '<div class="detail-row">昵称: <span>' + escHtml(found.nickname || 'N/A') + '</span></div>' +
-    '<div class="detail-row">父节点: <span>' + (found.parentId ? peerTag(found.parentId) : '无 (根)') + '</span></div>' +
-    '<div class="detail-row">备用父节点: <span>' + (found.backupParentIds && found.backupParentIds.length > 0 ? found.backupParentIds.map(peerTag).join(', ') : '无') + '</span></div>' +
-    '<div class="detail-row">子节点: <span>' + found.children.length + '</span></div>' +
-    '<div class="detail-row">扇出余量: <span>' + (ns ? ns.fanoutAvailable : 'N/A') + '</span></div>' +
+    '<div class="detail-row">' + t('detailNickname') + ': <span>' + escHtml(found.nickname || 'N/A') + '</span></div>' +
+    '<div class="detail-row">' + t('detailParent') + ': <span>' + (found.parentId ? peerTag(found.parentId) : t('noParent')) + '</span></div>' +
+    '<div class="detail-row">' + t('detailBackupParent') + ': <span>' + (found.backupParentIds && found.backupParentIds.length > 0 ? found.backupParentIds.map(peerTag).join(', ') : t('none')) + '</span></div>' +
+    '<div class="detail-row">' + t('detailChildren') + ': <span>' + found.children.length + '</span></div>' +
+    '<div class="detail-row">' + t('detailFanout') + ': <span>' + (ns ? ns.fanoutAvailable : 'N/A') + '</span></div>' +
     '<div class="detail-row">ICE: <span>' + iceState + '</span></div>' +
-    '<div class="detail-row">链路: <span>' + (li ? li.linkType + ' (' + Math.round(li.rtt || 0) + 'ms)' : 'N/A') + '</span></div>' +
-    '<div class="detail-row">候选: <span>' + (li ? li.candidateType : 'N/A') + '</span></div>' +
-    '<div class="detail-row">本地: <span>' + (li && li.localAddr ? li.localAddr + ':' + li.localPort + '/' + li.localProto : 'N/A') + '</span></div>' +
-    '<div class="detail-row">远端: <span>' + (li && li.remoteAddr ? li.remoteAddr + ':' + li.remotePort + '/' + li.remoteProto : 'N/A') + '</span></div>' +
-    '<div class="detail-row">网段: <span>' + (li && li.localSubnet ? li.localSubnet + (li.localSubnet === li.remoteSubnet ? ' (同)' : ' → ' + li.remoteSubnet) : 'N/A') + '</span></div>' +
-    '<div class="detail-row">就绪: <span>' + (ns && ns.isReady ? '✅' : '⏳') + '</span></div>' +
+    '<div class="detail-row">' + t('detailLink') + ': <span>' + (li ? li.linkType + ' (' + Math.round(li.rtt || 0) + 'ms)' : 'N/A') + '</span></div>' +
+    '<div class="detail-row">' + t('detailCandidate') + ': <span>' + (li ? li.candidateType : 'N/A') + '</span></div>' +
+    '<div class="detail-row">' + t('detailLocal') + ': <span>' + (li && li.localAddr ? li.localAddr + ':' + li.localPort + '/' + li.localProto : 'N/A') + '</span></div>' +
+    '<div class="detail-row">' + t('detailRemote') + ': <span>' + (li && li.remoteAddr ? li.remoteAddr + ':' + li.remotePort + '/' + li.remoteProto : 'N/A') + '</span></div>' +
+    '<div class="detail-row">' + t('detailSubnet') + ': <span>' + (li && li.localSubnet ? li.localSubnet + (li.localSubnet === li.remoteSubnet ? ' (' + t('same') + ')' : ' → ' + li.remoteSubnet) : 'N/A') + '</span></div>' +
+    '<div class="detail-row">' + t('detailReady') + ': <span>' + (ns && ns.isReady ? '✅' : '⏳') + '</span></div>' +
     statsHtml;
 });
 
@@ -2707,11 +2707,12 @@ function copyInviteLink() {
   if (!currentRoomId) return;
   var url = location.origin + location.pathname + '?room=' + encodeURIComponent(currentRoomId);
   if (currentRoomPwd) url += '&pwd=' + encodeURIComponent(currentRoomPwd);
+  if (currentLang === 'en') url += '&lang=en';
   navigator.clipboard.writeText(url).then(function() {
-    log('邀请链接已复制: ' + url);
-    showToast('邀请链接已复制');
+    log('Invite link copied: ' + url);
+    showToast(t('inviteCopied'));
   }).catch(function() {
-    prompt('复制此链接分享给观众:', url);
+    prompt(t('inviteCopyPrompt'), url);
   });
 }
 
@@ -2738,7 +2739,7 @@ function showToast(msg) {
   if (!room) return;
 
   var pwd = params.get('pwd') || '';
-  var nick = params.get('nick') || ('观众' + Math.floor(Math.random() * 10000));
+  var nick = params.get('nick') || (t('defaultViewer') + Math.floor(Math.random() * 10000));
 
   // Fill form fields so the rest of the flow works normally
   document.getElementById('joinRoomInput').value = room;

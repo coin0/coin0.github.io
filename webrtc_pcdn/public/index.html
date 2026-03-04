@@ -55,9 +55,10 @@ select { cursor: pointer; }
 </head>
 <body>
 
-<div class="header">
-  <h1>🌐 WebRTC PCDN 级联直播系统</h1>
-  <p>单主播 + 多观众 · 树状级联分发 · P2P加速</p>
+<div class="header" style="position:relative">
+  <h1 data-i18n="title">🌐 WebRTC PCDN 级联直播系统</h1>
+  <p data-i18n="subtitle">单主播 + 多观众 · 树状级联分发 · P2P加速</p>
+  <button id="langToggle" onclick="toggleLang()" style="position:absolute;right:16px;top:50%;transform:translateY(-50%);background:var(--border);color:var(--text);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px">EN</button>
 </div>
 
 <!-- Additional styles -->
@@ -213,56 +214,56 @@ video { width: 100%; border-radius: 6px; background: #000; }
 
 <!-- Stats Bar -->
 <div class="stats-bar" id="statsBar" style="display:none">
-  <div class="stat-item">👥 在线观众: <span id="statViewers">0</span></div>
-  <div class="stat-item">🌳 树深度: <span id="statDepth">0</span></div>
-  <div class="stat-item">💾 带宽节省: <span id="statSaved">0%</span></div>
-  <div class="stat-item">📡 主播上行: <span id="statPcdn">0</span> 路</div>
-  <div class="stat-item">🔗 链路: <span id="statLinks">-</span></div>
+  <div class="stat-item">👥 <span data-i18n="statViewersLabel">在线观众</span>: <span id="statViewers">0</span></div>
+  <div class="stat-item">🌳 <span data-i18n="statDepthLabel">树深度</span>: <span id="statDepth">0</span></div>
+  <div class="stat-item">💾 <span data-i18n="statSavedLabel">带宽节省</span>: <span id="statSaved">0%</span></div>
+  <div class="stat-item">📡 <span data-i18n="statPcdnLabel">主播上行</span>: <span id="statPcdn">0</span> <span data-i18n="statRoutes">路</span></div>
+  <div class="stat-item">🔗 <span data-i18n="statLinksLabel">链路</span>: <span id="statLinks">-</span></div>
 </div>
 
 <!-- Tabs -->
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('lobby')">🏠 大厅</div>
-  <div class="tab" onclick="switchTab('live')">📺 直播</div>
-  <div class="tab" onclick="switchTab('topology')">🌳 拓扑</div>
-  <div class="tab" onclick="switchTab('log')">📋 日志</div>
+  <div class="tab active" onclick="switchTab('lobby')" data-i18n="tabLobby">🏠 大厅</div>
+  <div class="tab" onclick="switchTab('live')" data-i18n="tabLive">📺 直播</div>
+  <div class="tab" onclick="switchTab('topology')" data-i18n="tabTopology">🌳 拓扑</div>
+  <div class="tab" onclick="switchTab('log')" data-i18n="tabLog">📋 日志</div>
 </div>
 
 <!-- TAB: Lobby -->
 <div class="tab-content active" id="tab-lobby">
   <div class="container col">
     <div class="panel">
-      <h2>📺 正在直播的房间</h2>
-      <div class="room-list" id="roomList"><div style="color:var(--muted);font-size:13px">暂无直播房间</div></div>
+      <h2 data-i18n="liveRooms">📺 正在直播的房间</h2>
+      <div class="room-list" id="roomList"><div style="color:var(--muted);font-size:13px" data-i18n="noRooms">暂无直播房间</div></div>
     </div>
     <div class="container" style="padding:0">
       <div class="panel">
-        <h2>🎥 创建直播</h2>
-        <div class="form-row"><label>房间号</label><input type="text" id="roomIdInput" value="room1"></div>
-        <div class="form-row"><label>房间标题</label><input type="text" id="roomTitle" placeholder="我的直播间"></div>
-        <div class="form-row"><label>房间密码</label><input type="password" id="roomPassword" placeholder="可选"></div>
-        <div class="form-row"><label>昵称</label><input type="text" id="pubNickname" value="主播"></div>
-        <button class="btn btn-primary" id="btnPublish" onclick="startPublish()">🎥 开始直播</button>
+        <h2 data-i18n="createLive">🎥 创建直播</h2>
+        <div class="form-row"><label data-i18n="roomId">房间号</label><input type="text" id="roomIdInput" value="room1"></div>
+        <div class="form-row"><label data-i18n="roomTitleLabel">房间标题</label><input type="text" id="roomTitle" data-i18n-placeholder="roomTitlePh" placeholder="我的直播间"></div>
+        <div class="form-row"><label data-i18n="roomPwd">房间密码</label><input type="password" id="roomPassword" data-i18n-placeholder="optionalPh" placeholder="可选"></div>
+        <div class="form-row"><label data-i18n="nickname">昵称</label><input type="text" id="pubNickname" value="主播"></div>
+        <button class="btn btn-primary" id="btnPublish" onclick="startPublish()" data-i18n="startLive">🎥 开始直播</button>
       </div>
       <div class="panel">
-        <h2>👀 加入观看</h2>
-        <div class="form-row"><label>房间号</label><input type="text" id="joinRoomInput" value="room1"></div>
-        <div class="form-row"><label>密码</label><input type="password" id="joinPassword" placeholder="如需要"></div>
-        <div class="form-row"><label>昵称</label><input type="text" id="viewerNickname" placeholder="观众"></div>
-        <button class="btn btn-primary" id="btnJoin" onclick="joinAsViewer()">👀 加入观看</button>
+        <h2 data-i18n="joinWatch">👀 加入观看</h2>
+        <div class="form-row"><label data-i18n="roomId">房间号</label><input type="text" id="joinRoomInput" value="room1"></div>
+        <div class="form-row"><label data-i18n="password">密码</label><input type="password" id="joinPassword" data-i18n-placeholder="ifNeededPh" placeholder="如需要"></div>
+        <div class="form-row"><label data-i18n="nickname">昵称</label><input type="text" id="viewerNickname" data-i18n-placeholder="viewerPh" placeholder="观众"></div>
+        <button class="btn btn-primary" id="btnJoin" onclick="joinAsViewer()" data-i18n="joinBtn">👀 加入观看</button>
       </div>
     </div>
     <!-- Network Settings (collapsible) -->
     <div class="panel">
-      <div class="collapsible-header" onclick="toggleCollapsible(this)">⚙️ 网络设置 (STUN/TURN)</div>
+      <div class="collapsible-header" onclick="toggleCollapsible(this)" data-i18n="networkSettings">⚙️ 网络设置 (STUN/TURN)</div>
       <div class="collapsible-body" id="networkSettings">
-        <div class="form-row"><label>STUN 服务器</label><input type="text" id="stunInput" value="stun:stun.l.google.com:19302" placeholder="stun:host:port"></div>
-        <div class="form-row"><label>TURN 地址</label><input type="text" id="turnUrl" placeholder="turn:host:3478"></div>
-        <div class="form-row"><label>TURN 用户名</label><input type="text" id="turnUser" placeholder="username"></div>
-        <div class="form-row"><label>TURN 密码</label><input type="password" id="turnPass" placeholder="password"></div>
+        <div class="form-row"><label data-i18n="stunServer">STUN 服务器</label><input type="text" id="stunInput" value="stun:stun.l.google.com:19302" placeholder="stun:host:port"></div>
+        <div class="form-row"><label data-i18n="turnAddr">TURN 地址</label><input type="text" id="turnUrl" placeholder="turn:host:3478"></div>
+        <div class="form-row"><label data-i18n="turnUser">TURN 用户名</label><input type="text" id="turnUser" placeholder="username"></div>
+        <div class="form-row"><label data-i18n="turnPwd">TURN 密码</label><input type="password" id="turnPass" placeholder="password"></div>
         <div class="form-row">
-          <label>TURN 回退</label>
-          <select id="turnFallback"><option value="auto">自动 (P2P失败时使用TURN)</option><option value="always">始终使用TURN</option><option value="never">仅P2P</option></select>
+          <label data-i18n="turnFallbackLabel">TURN 回退</label>
+          <select id="turnFallback"><option value="auto" data-i18n="turnAuto">自动 (P2P失败时使用TURN)</option><option value="always" data-i18n="turnAlways">始终使用TURN</option><option value="never" data-i18n="turnNever">仅P2P</option></select>
         </div>
       </div>
     </div>
@@ -275,11 +276,11 @@ video { width: 100%; border-radius: 6px; background: #000; }
     <!-- Left: Video area -->
     <div class="panel" style="flex:2; position:relative;">
       <div id="publisherArea" style="display:none">
-        <h2>🎥 主播端</h2>
+        <h2 data-i18n="publisherTitle">🎥 主播端</h2>
         <div class="controls">
-          <button class="btn btn-danger btn-sm" onclick="stopPublish()">停止直播</button>
-          <button class="btn btn-secondary btn-sm" id="btnScreenShare" onclick="toggleScreenShare()">🖥️ 共享屏幕</button>
-          <button class="btn btn-success btn-sm" onclick="copyInviteLink()">📎 复制邀请链接</button>
+          <button class="btn btn-danger btn-sm" onclick="stopPublish()" data-i18n="stopLive">停止直播</button>
+          <button class="btn btn-secondary btn-sm" id="btnScreenShare" onclick="toggleScreenShare()" data-i18n="screenShare">🖥️ 共享屏幕</button>
+          <button class="btn btn-success btn-sm" onclick="copyInviteLink()" data-i18n="copyInvite">📎 复制邀请链接</button>
           <select id="resolutionSelect" onchange="changeResolution()" style="width:100px">
             <option value="auto">自动</option>
             <option value="720">720p</option>
@@ -290,21 +291,21 @@ video { width: 100%; border-radius: 6px; background: #000; }
             <option value="15">15fps</option>
           </select>
         </div>
-        <div class="screen-share-banner" id="screenShareBanner">🖥️ 正在共享屏幕 <button class="btn btn-sm btn-danger" onclick="stopScreenShare()">停止共享</button></div>
+        <div class="screen-share-banner" id="screenShareBanner">🖥️ <span data-i18n="sharingScreen">正在共享屏幕</span> <button class="btn btn-sm btn-danger" onclick="stopScreenShare()" data-i18n="stopShare">停止共享</button></div>
         <div class="status" id="publisherStatus"></div>
-        <h3>📡 子节点连接状态</h3>
-        <div class="ice-status" id="hostIceStatus"><span style="color:var(--muted);font-size:12px">暂无子节点</span></div>
+        <h3 data-i18n="childNodeStatus">📡 子节点连接状态</h3>
+        <div class="ice-status" id="hostIceStatus"><span style="color:var(--muted);font-size:12px" data-i18n="noChildNodes">暂无子节点</span></div>
         <div style="position:relative">
           <video id="localVideo" autoplay muted playsinline></video>
-          <div class="reconnecting-overlay" id="pubReconnectOverlay">🔄 正在重新连接...</div>
+          <div class="reconnecting-overlay" id="pubReconnectOverlay" data-i18n="reconnecting">🔄 正在重新连接...</div>
         </div>
       </div>
       <div id="viewerArea" style="display:none">
-        <h2>👀 观看中</h2>
+        <h2 data-i18n="watchingTitle">👀 观看中</h2>
         <div class="controls">
-          <button class="btn btn-danger btn-sm" onclick="leaveRoom()">离开房间</button>
-          <button class="btn btn-success btn-sm" id="btnUnmute" onclick="unmuteVideo()">🔊 开启声音</button>
-          <button class="btn btn-secondary btn-sm" onclick="copyInviteLink()">📎 邀请链接</button>
+          <button class="btn btn-danger btn-sm" onclick="leaveRoom()" data-i18n="leaveRoom">离开房间</button>
+          <button class="btn btn-success btn-sm" id="btnUnmute" onclick="unmuteVideo()" data-i18n="unmute">🔊 开启声音</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyInviteLink()" data-i18n="inviteLink">📎 邀请链接</button>
         </div>
         <div class="status" id="viewerStatus"></div>
         <div class="ice-status" id="iceStatus"></div>
@@ -313,16 +314,16 @@ video { width: 100%; border-radius: 6px; background: #000; }
           <div class="danmaku-container" id="danmakuContainer"></div>
         </div>
         <div class="label" id="remoteVideoLabel" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
-        <div class="reconnecting-overlay" id="reconnectOverlay">🔄 正在重新连接...</div>
+        <div class="reconnecting-overlay" id="reconnectOverlay" data-i18n="reconnecting">🔄 正在重新连接...</div>
       </div>
       <div id="noLiveArea">
-        <p style="color:var(--muted);text-align:center;padding:40px">请先在大厅创建或加入直播</p>
+        <p style="color:var(--muted);text-align:center;padding:40px" data-i18n="noLiveMsg">请先在大厅创建或加入直播</p>
       </div>
     </div>
 
     <!-- Right: Chat -->
     <div class="panel" style="flex:1; min-width: 280px;">
-      <h2>💬 聊天</h2>
+      <h2 data-i18n="chatTitle">💬 聊天</h2>
       <div class="chat-panel">
         <div class="chat-messages" id="chatMessages"></div>
         <div class="emoji-bar">
@@ -333,8 +334,8 @@ video { width: 100%; border-radius: 6px; background: #000; }
           <button class="emoji-btn" onclick="sendReaction('🔥')">🔥</button>
         </div>
         <div class="chat-input-row">
-          <input type="text" id="chatInput" placeholder="发送消息..." onkeydown="if(event.key==='Enter')sendChat()">
-          <button class="btn btn-primary btn-sm" onclick="sendChat()">发送</button>
+          <input type="text" id="chatInput" data-i18n-placeholder="chatPh" placeholder="发送消息..." onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="btn btn-primary btn-sm" onclick="sendChat()" data-i18n="sendBtn">发送</button>
         </div>
       </div>
     </div>
@@ -345,13 +346,13 @@ video { width: 100%; border-radius: 6px; background: #000; }
 <div class="tab-content" id="tab-topology">
   <div class="container col">
     <div class="panel">
-      <h2>🌳 网络拓扑可视化</h2>
+      <h2 data-i18n="topoTitle">🌳 网络拓扑可视化</h2>
       <canvas id="topoCanvas"></canvas>
       <div class="topo-legend">
-        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#e94560"></div> 主播</div>
-        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#27ae60"></div> 中继节点</div>
-        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#3498db"></div> 观众</div>
-        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:transparent;border:1px dashed #f90"></div> 备用连接</div>
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#e94560"></div> <span data-i18n="legendPublisher">主播</span></div>
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#27ae60"></div> <span data-i18n="legendRelay">中继节点</span></div>
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#3498db"></div> <span data-i18n="legendViewer">观众</span></div>
+        <div class="topo-legend-item"><div class="topo-legend-dot" style="background:transparent;border:1px dashed #f90"></div> <span data-i18n="legendBackup">备用连接</span></div>
       </div>
       <div class="topo-legend" style="margin-top:4px">
         <div class="topo-legend-item"><div style="width:20px;height:3px;background:#0f9;border-radius:2px"></div> LOCAL</div>
@@ -361,7 +362,7 @@ video { width: 100%; border-radius: 6px; background: #000; }
       </div>
     </div>
     <div class="node-detail" id="nodeDetail">
-      <h4 id="nodeDetailTitle">节点详情</h4>
+      <h4 id="nodeDetailTitle" data-i18n="nodeDetail">节点详情</h4>
       <div id="nodeDetailBody"></div>
     </div>
   </div>
@@ -371,7 +372,7 @@ video { width: 100%; border-radius: 6px; background: #000; }
 <div class="tab-content" id="tab-log">
   <div class="container col">
     <div class="panel log-panel" style="max-height:600px">
-      <h2 style="display:flex;align-items:center;justify-content:space-between">📋 系统日志 <button onclick="copyLogs()" style="font-size:12px;padding:3px 10px;cursor:pointer;background:var(--surface);color:var(--accent2);border:1px solid var(--accent2);border-radius:4px">📋 复制日志</button></h2>
+      <h2 style="display:flex;align-items:center;justify-content:space-between"><span data-i18n="logTitle">📋 系统日志</span> <button onclick="copyLogs()" style="font-size:12px;padding:3px 10px;cursor:pointer;background:var(--surface);color:var(--accent2);border:1px solid var(--accent2);border-radius:4px" data-i18n="copyLog">📋 复制日志</button></h2>
       <div id="logArea"></div>
     </div>
   </div>
@@ -381,6 +382,7 @@ video { width: 100%; border-radius: 6px; background: #000; }
 <div class="reaction-float" id="reactionFloat"></div>
 
 <script src="/socket.io.min.js"></script>
+<script src="/i18n.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
