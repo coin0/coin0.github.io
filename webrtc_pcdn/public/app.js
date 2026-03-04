@@ -95,6 +95,9 @@ var candidateCounts = {}; // targetId:role -> count
 var seenMsgIds = new Set();
 function markSeen(id) { seenMsgIds.add(id); if (seenMsgIds.size > 300) { var it = seenMsgIds.values(); seenMsgIds.delete(it.next().value); } }
 
+// Track peers confirmed left by server (prevent gossip re-adding them)
+var confirmedLeftPeers = {}; // peerId -> timestamp
+
 // Peer nicknames (from gossip)
 var peerNicknames = {};
 
@@ -536,6 +539,9 @@ function handleGossipMessage(msg, fromId) {
   if (msg.nodes) {
     msg.nodes.forEach(function(ns) {
       if (ns.peerId === myPeerId) return; // don't overwrite our own state
+      // Skip peers confirmed left by server (within last 60s)
+      var leftAt = confirmedLeftPeers[ns.peerId];
+      if (leftAt && Date.now() - leftAt < 60000) return;
       var existing = topologyMap.get(ns.peerId);
       if (!existing || ns.updatedAt > existing.updatedAt) {
         topologyMap.set(ns.peerId, ns);
@@ -591,6 +597,12 @@ function pruneTopology() {
     topologyMap.delete(pid);
     delete peerNicknames[pid];
   });
+
+  // Clean up old confirmed-left entries (older than 60s)
+  var leftKeys = Object.keys(confirmedLeftPeers);
+  for (var i = 0; i < leftKeys.length; i++) {
+    if (now - confirmedLeftPeers[leftKeys[i]] > 60000) delete confirmedLeftPeers[leftKeys[i]];
+  }
 }
 
 // ============================================================
@@ -1038,10 +1050,11 @@ function initSocket() {
 // Peer Left Handling (decentralized)
 // ============================================================
 function handlePeerLeft(peerId) {
-  // Remove from topology
+  // Remove from topology and mark as confirmed-left (prevent gossip re-adding)
   topologyMap.delete(peerId);
   delete peerNicknames[peerId];
   linkInfo.delete(peerId);
+  confirmedLeftPeers[peerId] = Date.now();
 
   // Close any connections to this peer
   var toClose = [];
@@ -1822,6 +1835,9 @@ function handleTopologyResponse(msg) {
   var merged = 0;
   msg.nodes.forEach(function(ns) {
     if (ns.peerId === myPeerId) return;
+    // Skip peers confirmed left by server (within last 60s)
+    var leftAt = confirmedLeftPeers[ns.peerId];
+    if (leftAt && Date.now() - leftAt < 60000) return;
     var existing = topologyMap.get(ns.peerId);
     if (!existing || ns.updatedAt > existing.updatedAt) {
       topologyMap.set(ns.peerId, ns);
@@ -2011,7 +2027,7 @@ async function joinAsViewer() {
   }
   
   isJoining = true;
-  myNickname = document.getElementById('viewerNickname').value.trim() || (t('defaultViewer') + Math.floor(Math.random() * 1000));
+  myNickname = document.getElementById('viewerNickname').value.trim() || (t('defaultViewer') + Math.floor(Math.random() * 900000 + 100000));
   initSocket();
 
   socket.emit('joinRoom', {
@@ -2862,6 +2878,7 @@ function cleanup() {
   linkInfo.clear();
   if (localStream) { localStream.getTracks().forEach(function(t) { t.stop(); }); localStream = null; }
   receivedStream = null; primaryParentId = null; backupParents = [];
+  confirmedLeftPeers = {};
   currentRoomId = null; currentRoomPwd = null;
   if (socket) { socket.disconnect(); socket = null; }
   myRole = null; myPeerId = null; myNodeState = null;
@@ -2915,7 +2932,7 @@ function showToast(msg) {
   if (!room) return;
 
   var pwd = params.get('pwd') || '';
-  var nick = params.get('nick') || (t('defaultViewer') + Math.floor(Math.random() * 10000));
+  var nick = params.get('nick') || (t('defaultViewer') + Math.floor(Math.random() * 900000 + 100000));
 
   // Fill form fields so the rest of the flow works normally
   document.getElementById('joinRoomInput').value = room;
