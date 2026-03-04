@@ -566,21 +566,26 @@ function handleGossipMessage(msg, fromId) {
     updateTopologyUI();
     // Check if we should adjust our backup connections
     maybeAdjustBackups();
+    // If we're orphaned (no primary), try to find a parent from updated topology
+    if (myRole === 'viewer' && !primaryParentId) retryFindParent();
   }
 }
 
 // Remove stale nodes from topology (not seen in gossip for a while)
 function pruneTopology() {
   var now = Date.now();
-  // Extend threshold during network recovery to preserve topology knowledge
-  var staleThreshold = networkRecoveryState.isRecovering ? 60000 : 30000;
+  // Extend threshold when orphaned or recovering to preserve topology knowledge
+  var isOrphaned = myRole === 'viewer' && !primaryParentId;
+  var staleThreshold = (networkRecoveryState.isRecovering || isOrphaned) ? 60000 : 30000;
   var toRemove = [];
   topologyMap.forEach(function(ns, pid) {
     if (pid === myPeerId) return;
+    // Never prune the publisher — it's the root of the stream tree
+    if (ns.role === 'publisher') return;
     if (now - ns.updatedAt > staleThreshold) toRemove.push(pid);
   });
   if (toRemove.length > 0) {
-    log('Topo prune: removed ' + toRemove.length + ' stale nodes [' + toRemove.map(peerTag).join(', ') + ']' + (networkRecoveryState.isRecovering ? ' (recovering, threshold=' + staleThreshold/1000 + 's)' : ''), 'debug');
+    log('Topo prune: removed ' + toRemove.length + ' stale nodes [' + toRemove.map(peerTag).join(', ') + ']' + ((networkRecoveryState.isRecovering || isOrphaned) ? ' (recovering/orphaned, threshold=' + staleThreshold/1000 + 's)' : ''), 'debug');
   }
   toRemove.forEach(function(pid) {
     topologyMap.delete(pid);
@@ -1151,10 +1156,156 @@ async function promoteOrFindNewPrimary() {
     broadcastGossip();
   } else {
     log('No available parent, waiting for topology update...', 'error');
-    // Will retry on next gossip update
+    // Clear failover flag before starting orphan recovery
+    failoverInProgress = false;
+    // Start orphan recovery timer — don't just wait for gossip (we may have no connections)
+    retryFindParent();
   }
   showReconnectOverlay(false);
   failoverInProgress = false;
+}
+
+// ============================================================
+// Retry finding a parent when orphaned (no primary)
+// ============================================================
+var _retryFindParentTimer = null;
+var _retryFindParentAttempts = 0;
+var _bootstrapFallbackInProgress = false;
+
+function retryFindParent() {
+  if (myRole !== 'viewer') return;
+  if (primaryParentId) return; // already have a parent
+  if (failoverInProgress) return;
+  if (_bootstrapFallbackInProgress) return;
+
+  var excludeList = [myPeerId];
+  connections.forEach(function(ci) {
+    if (ci.role === 'child' && excludeList.indexOf(ci.peerId) < 0) {
+      excludeList.push(ci.peerId);
+    }
+  });
+  var newParent = selectBestParent(excludeList);
+  if (newParent) {
+    log('Orphan recovery: found parent ' + peerTag(newParent), 'warn');
+    primaryParentId = newParent;
+    _retryFindParentAttempts = 0;
+    connectToParent(newParent, 'primary');
+    maybeAdjustBackups();
+    broadcastGossip();
+    showReconnectOverlay(false);
+    if (_retryFindParentTimer) { clearInterval(_retryFindParentTimer); _retryFindParentTimer = null; }
+  } else {
+    _retryFindParentAttempts++;
+
+    // Check WHY no parent was found — if nodes exist but all blocked by noFanout
+    // or cooldown, our local data is likely stale. Server has real-time fanout info,
+    // so fast-track the bootstrap fallback (don't wait 3 attempts).
+    var hasBlockedNodes = false;
+    topologyMap.forEach(function(ns, pid) {
+      if (pid === myPeerId) return;
+      if (excludeList.indexOf(pid) >= 0) return;
+      if (!ns.isReady) return;
+      // Node exists and is ready but blocked by stale fanout or cooldown
+      if (ns.fanoutAvailable <= 0 || isPeerInCooldown(pid)) hasBlockedNodes = true;
+    });
+
+    var shouldBootstrap = _retryFindParentAttempts >= 3 ||
+      (_retryFindParentAttempts >= 1 && hasBlockedNodes);
+
+    if (shouldBootstrap) {
+      log('Orphan recovery: ' + (hasBlockedNodes ? 'nodes exist but all blocked (stale fanout/cooldown)' : 'local topology exhausted') +
+        ' after ' + _retryFindParentAttempts + ' attempts, requesting bootstrap from server...', 'warn');
+      requestBootstrapForOrphan();
+      return;
+    }
+    // Schedule periodic retry if not already scheduled
+    if (!_retryFindParentTimer) {
+      log('Orphan recovery: no parent available, retrying every 3s (attempt ' + _retryFindParentAttempts + ')...', 'warn');
+      _retryFindParentTimer = setInterval(function() {
+        retryFindParent();
+      }, 3000);
+    }
+  }
+}
+
+// Fallback: request fresh bootstrap nodes from signaling server when orphaned
+function requestBootstrapForOrphan() {
+  if (!socket || !socket.connected) {
+    log('Orphan bootstrap fallback: signaling not connected', 'error');
+    return;
+  }
+  _bootstrapFallbackInProgress = true;
+
+  // Clear rejection cooldowns — stale fanout data may have incorrectly marked nodes as full
+  rejectedPeers = {};
+
+  socket.emit('requestBootstrap', { roomId: currentRoomId }, function(res) {
+    _bootstrapFallbackInProgress = false;
+
+    if (res.error) {
+      if (res.error.indexOf('不存在') >= 0 || res.error.indexOf('无主播') >= 0) {
+        log('Publisher left room: ' + res.error, 'warn');
+        alert(t('liveEnded'));
+        cleanup();
+        switchTab('lobby');
+        return;
+      }
+      log('Orphan bootstrap fallback failed: ' + res.error, 'error');
+      // Reset attempts so local retry continues
+      _retryFindParentAttempts = 0;
+      return;
+    }
+
+    var bootstrapNodes = res.bootstrapNodes || [];
+    log('Orphan bootstrap: received ' + bootstrapNodes.length + ' nodes from server' + (res.publisherOffline ? ' [publisher offline]' : ''), 'warn');
+
+    if (bootstrapNodes.length === 0) {
+      log('Orphan bootstrap: no nodes available, will keep retrying...', 'warn');
+      _retryFindParentAttempts = 0;
+      return;
+    }
+
+    // Seed topology with fresh bootstrap data
+    bootstrapNodes.forEach(function(node) {
+      var pid = node.peerId || node.socketId;
+      peerNicknames[pid] = node.nickname;
+      // Always overwrite — server data is fresher than our stale local topology
+      topologyMap.set(pid, {
+        peerId: pid, nickname: node.nickname, role: node.isPublisher ? 'publisher' : 'viewer',
+        parentId: null, backupParentIds: [], children: [],
+        linkTypes: {}, isReady: true, joinedAt: Date.now(),
+        fanoutMax: MAX_FANOUT, fanoutAvailable: node.fanoutAvailable != null ? node.fanoutAvailable : MAX_FANOUT,
+        updatedAt: Date.now()
+      });
+    });
+
+    // Now try to find a parent from the refreshed topology
+    _retryFindParentAttempts = 0;
+    var excludeList = [myPeerId];
+    connections.forEach(function(ci) {
+      if (ci.role === 'child' && excludeList.indexOf(ci.peerId) < 0) {
+        excludeList.push(ci.peerId);
+      }
+    });
+    var newParent = selectBestParent(excludeList);
+    if (newParent) {
+      log('Orphan bootstrap: connecting to ' + peerTag(newParent), 'warn');
+      primaryParentId = newParent;
+      connectToParent(newParent, 'primary');
+      showReconnectOverlay(false);
+      if (_retryFindParentTimer) { clearInterval(_retryFindParentTimer); _retryFindParentTimer = null; }
+      setTimeout(function() { maybeAdjustBackups(); broadcastGossip(); }, 3000);
+    } else {
+      // Even with fresh bootstrap, no parent found (all full?) — keep retrying
+      log('Orphan bootstrap: still no parent available after server refresh, retrying...', 'warn');
+      // Restart retry cycle
+      if (!_retryFindParentTimer) {
+        _retryFindParentTimer = setInterval(function() {
+          retryFindParent();
+        }, 3000);
+      }
+    }
+  });
 }
 
 // ============================================================
@@ -1681,7 +1832,10 @@ function handleTopologyResponse(msg) {
   log('Topo response: received ' + msg.nodes.length + ' nodes, merged ' + merged + ', total ' + topologyMap.size, 'debug');
   updateTopologyUI();
   // Now that we have topology, adjust backups if needed
-  if (myRole === 'viewer') maybeAdjustBackups();
+  if (myRole === 'viewer') {
+    maybeAdjustBackups();
+    if (!primaryParentId) retryFindParent();
+  }
 }
 
 function broadcastDc(msg, excludeId) {
@@ -2713,6 +2867,9 @@ function cleanup() {
   myRole = null; myPeerId = null; myNodeState = null;
   isJoining = false; // Reset join flag
   failoverInProgress = false; // Reset failover flag
+  if (_retryFindParentTimer) { clearInterval(_retryFindParentTimer); _retryFindParentTimer = null; }
+  _retryFindParentAttempts = 0;
+  _bootstrapFallbackInProgress = false;
 }
 
 window.addEventListener('resize', function() {

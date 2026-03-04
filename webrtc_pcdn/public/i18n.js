@@ -78,7 +78,7 @@ var I18N = {
     subtitle: 'Single Publisher + Multi-Viewer · Tree Cascade · P2P Accelerated',
     tabLobby: '🏠 Lobby', tabLive: '📺 Live', tabTopology: '🌳 Topology', tabLog: '📋 Log',
     statViewersLabel: 'Viewers', statDepthLabel: 'Tree Depth', statSavedLabel: 'BW Saved',
-    statPcdnLabel: 'Uplinks', statRoutes: '', statLinksLabel: 'Links',
+    statPcdnLabel: 'Uplinks', statRoutes: ' ', statLinksLabel: 'Links',
     liveRooms: '📺 Live Rooms', noRooms: 'No live rooms',
     createLive: '🎥 Create Live', joinWatch: '👀 Join as Viewer',
     roomId: 'Room ID', roomTitleLabel: 'Room Title', roomPwd: 'Room Password',
