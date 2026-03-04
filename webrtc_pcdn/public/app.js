@@ -137,7 +137,7 @@ function findConnByPeer(peerId) {
   return found;
 }
 function peerTag(peerId) {
-  if (!peerId) return '无';
+  if (!peerId) return 'none';
   var short = peerId.substring(0, 8);
   var nick = peerNicknames[peerId];
   return nick ? short + '(' + nick + ')' : short;
@@ -323,11 +323,11 @@ function detectLinkType(pc, peerId) {
       // For prflx with no address, just show the type
       if (lTypeDisplay === 'prflx' && !lAddr) lAddrDisplay = '(prflx)';
       if (rTypeDisplay === 'prflx' && !rAddr) rAddrDisplay = '(prflx)';
-      log('链路检测 ' + peerTag(peerId) + ': ' + lt +
+      log('Link detect ' + peerTag(peerId) + ': ' + lt +
         ' RTT=' + Math.round(rtt) + 'ms' +
         ' local=' + lTypeDisplay + ' ' + lAddrDisplay + '/' + lProto +
         ' remote=' + rTypeDisplay + ' ' + rAddrDisplay + '/' + rProto +
-        ' subnet=' + lSubnet + (lSubnet === rSubnet ? '(同网段)' : '→' + rSubnet));
+        ' subnet=' + lSubnet + (lSubnet === rSubnet ? '(same subnet)' : '→' + rSubnet));
     }
   }).catch(function() {});
 }
@@ -395,11 +395,11 @@ function selectBestParent(excludeIds) {
   });
   candidates.sort(function(a, b) { return a.score - b.score; });
   if (candidates.length > 0) {
-    log('选父候选: top3=[' + candidates.slice(0, 3).map(function(c) {
+    log('Parent candidates: top3=[' + candidates.slice(0, 3).map(function(c) {
       return peerTag(c.peerId) + '(score=' + Math.round(c.score) + ',fanout=' + c.ns.fanoutAvailable + ',depth=' + getNodeDepth(c.peerId) + ')';
-    }).join(', ') + '] 跳过: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout + ' cooldown=' + skipped.cooldown, 'debug');
+    }).join(', ') + '] skipped: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout + ' cooldown=' + skipped.cooldown, 'debug');
   } else {
-    log('选父无候选: topo=' + topologyMap.size + ' 跳过: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout + ' cooldown=' + skipped.cooldown, 'debug');
+    log('No parent candidates: topo=' + topologyMap.size + ' skipped: excluded=' + skipped.excluded + ' notReady=' + skipped.notReady + ' noFanout=' + skipped.noFanout + ' cooldown=' + skipped.cooldown, 'debug');
   }
   return candidates.length > 0 ? candidates[0].peerId : null;
 }
@@ -510,7 +510,7 @@ function broadcastGossip() {
   });
   // Only log when target count changes
   if (gossipSentTo.length > 0 && gossipSentTo.length !== prevLogState.gossipTargets) {
-    log('Gossip广播 v' + gossipVersion + ' -> ' + gossipSentTo.length + '节点 topo=' + topologyMap.size, 'debug');
+    log('Gossip broadcast v' + gossipVersion + ' -> ' + gossipSentTo.length + 'nodes topo=' + topologyMap.size, 'debug');
     prevLogState.gossipTargets = gossipSentTo.length;
   }
 }
@@ -547,7 +547,7 @@ function handleGossipMessage(msg, fromId) {
   }
   if (mergedNodes.length > 1) {
     // Only log when multiple nodes updated (skip single-node heartbeat updates)
-    log('Gossip合并 from ' + peerTag(fromId) + ': 更新 ' + mergedNodes.length + ' 节点 [' + mergedNodes.join(', ') + '] topo=' + topologyMap.size, 'debug');
+    log('Gossip merge from ' + peerTag(fromId) + ': updated ' + mergedNodes.length + ' nodes [' + mergedNodes.join(', ') + '] topo=' + topologyMap.size, 'debug');
   }
 
   // Forward with decremented TTL
@@ -580,7 +580,7 @@ function pruneTopology() {
     if (now - ns.updatedAt > staleThreshold) toRemove.push(pid);
   });
   if (toRemove.length > 0) {
-    log('拓扑修剪: 移除 ' + toRemove.length + ' 个过期节点 [' + toRemove.map(peerTag).join(', ') + ']' + (networkRecoveryState.isRecovering ? ' (恢复中,阈值=' + staleThreshold/1000 + 's)' : ''), 'debug');
+    log('Topo prune: removed ' + toRemove.length + ' stale nodes [' + toRemove.map(peerTag).join(', ') + ']' + (networkRecoveryState.isRecovering ? ' (recovering, threshold=' + staleThreshold/1000 + 's)' : ''), 'debug');
   }
   toRemove.forEach(function(pid) {
     topologyMap.delete(pid);
@@ -608,10 +608,10 @@ function relaySdpSignal(targetId, data) {
       // Flush any pending candidate count for this target
       var candKey = targetId + ':' + sigRole;
       if (candidateCounts[candKey]) {
-        log('信令发送(socket): ' + candidateCounts[candKey] + ' candidates -> ' + peerTag(targetId) + ' role=' + sigRole, 'debug');
+        log('Signal(socket): ' + candidateCounts[candKey] + ' candidates -> ' + peerTag(targetId) + ' role=' + sigRole, 'debug');
         delete candidateCounts[candKey];
       }
-      log('信令发送(socket): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole, 'debug');
+      log('Signal(socket): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole, 'debug');
     }
     return;
   }
@@ -625,18 +625,18 @@ function relaySdpSignal(targetId, data) {
   if (usableDcCount === 0) {
     // No socket AND no usable DataChannels - this is a network switch scenario
     // All connections are dead, need to trigger network recovery
-    log('信令发送失败: socket断开且无可用DC (可能网络切换)', 'error');
+    log('Signal failed: socket down, no usable DC (possible network switch)', 'error');
     
     // Only trigger recovery once, not for every signal attempt
     if (!networkRecoveryState.isRecovering) {
-      log('触发网络恢复流程...', 'warn');
+      log('Triggering network recovery...', 'warn');
       handleNetworkChange();
     }
     return;
   }
 
   // Fallback: relay through DataChannel
-  log('信令发送(DC relay): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole + ' (socket断开, dc=' + usableDcCount + ')', 'warn');
+  log('Signal(DC relay): ' + sigType + ' -> ' + peerTag(targetId) + ' role=' + sigRole + ' (socket down, dc=' + usableDcCount + ')', 'warn');
   var relayMsg = {
     type: 'relay-signal',
     fromId: myPeerId,
@@ -717,21 +717,32 @@ function handleRttPong(msg, fromId) {
 // ============================================================
 function initNetworkChangeDetection() {
   // Detect network type changes (WiFi <-> Cellular)
+  // Debounce: only react when type/effectiveType actually changes, not on every signal fluctuation
   if (navigator.connection) {
+    var _lastNetType = (navigator.connection.type || '') + ':' + (navigator.connection.effectiveType || '');
+    var _netChangeTimer = null;
     navigator.connection.addEventListener('change', function() {
-      log('网络类型变化: ' + navigator.connection.effectiveType + ' (' + navigator.connection.type + ')', 'warn');
-      handleNetworkChange();
+      var cur = (navigator.connection.type || '') + ':' + (navigator.connection.effectiveType || '');
+      if (cur === _lastNetType) return; // same type, ignore (signal strength fluctuation)
+      _lastNetType = cur;
+      // Debounce: wait 2s for rapid successive changes to settle
+      if (_netChangeTimer) clearTimeout(_netChangeTimer);
+      _netChangeTimer = setTimeout(function() {
+        _netChangeTimer = null;
+        log('Network type changed: ' + navigator.connection.effectiveType + ' (' + navigator.connection.type + ')', 'warn');
+        handleNetworkChange();
+      }, 2000);
     });
   }
 
   // Detect online/offline events
   window.addEventListener('online', function() {
-    log('网络恢复在线', 'warn');
+    log('Network back online', 'warn');
     handleNetworkChange();
   });
 
   window.addEventListener('offline', function() {
-    log('网络离线', 'error');
+    log('Network offline', 'error');
     showReconnectOverlay(true);
   });
 }
@@ -743,7 +754,7 @@ function handleNetworkChange() {
   networkRecoveryState.lastNetworkChange = Date.now();
   networkRecoveryState.isRecovering = true;
 
-  log('检测到网络变化，检查连接状态...', 'warn');
+  log('Network change detected, checking connections...', 'warn');
   showReconnectOverlay(true);
 
   // Give network a moment to stabilize
@@ -760,7 +771,7 @@ function checkAndRecoverConnections() {
 
   // Don't interfere if failover is already handling recovery
   if (failoverInProgress) {
-    log('故障转移进行中，跳过网络恢复检查', 'debug');
+    log('Failover in progress, skip network recovery', 'debug');
     networkRecoveryState.isRecovering = false;
     return;
   }
@@ -805,13 +816,13 @@ function checkAndRecoverConnections() {
       }
     });
     if (socketOk) {
-      log('主播网络恢复: socket=' + (socketOk ? 'ok' : 'down') + ' children=' + (hasConnectedChild ? 'ok' : 'none'), 'warn');
+      log('Publisher recovery: socket=' + (socketOk ? 'ok' : 'down') + ' children=' + (hasConnectedChild ? 'ok' : 'none'), 'warn');
       showReconnectOverlay(false);
       networkRecoveryState.isRecovering = false;
       // Broadcast gossip to let viewers know we're back
       broadcastGossip();
     } else {
-      log('主播等待信令重连...', 'warn');
+      log('Publisher waiting for signaling reconnect...', 'warn');
       // Socket.io will auto-reconnect and trigger autoRejoin
       networkRecoveryState.isRecovering = false;
     }
@@ -819,11 +830,11 @@ function checkAndRecoverConnections() {
   }
 
   // For viewer - detailed status
-  log('观众网络恢复检查: socket=' + (socketOk ? 'ok' : 'down') + ' primary=' + (primaryOk ? 'ok' : 'down') + ' anyConn=' + (anyConnAlive ? 'ok' : 'down') + ' stuck=' + stuckCount + '/' + totalCount, 'warn');
+  log('Viewer recovery check: socket=' + (socketOk ? 'ok' : 'down') + ' primary=' + (primaryOk ? 'ok' : 'down') + ' anyConn=' + (anyConnAlive ? 'ok' : 'down') + ' stuck=' + stuckCount + '/' + totalCount, 'warn');
 
   if (socketOk && primaryOk) {
     // Everything is fine
-    log('连接正常，无需恢复');
+    log('Connections OK, no recovery needed');
     showReconnectOverlay(false);
     networkRecoveryState.isRecovering = false;
     return;
@@ -831,21 +842,21 @@ function checkAndRecoverConnections() {
 
   // Detect "all connections stuck in ice=new" scenario (network switch killed everything)
   if (socketOk && totalCount > 0 && allConnsStuck && stuckCount > 0) {
-    log('所有连接卡在ice=new状态，可能网络切换导致，重新获取引导节点...', 'warn');
+    log('All connections stuck in ice=new, possible network switch, requesting bootstrap...', 'warn');
     requestNewBootstrapAndReconnect();
     return;
   }
 
   if (socketOk && !primaryOk) {
     // Socket is ok but WebRTC died - need to reconnect to peers
-    log('WebRTC连接断开，重新获取引导节点...', 'warn');
+    log('WebRTC connections down, requesting bootstrap...', 'warn');
     requestNewBootstrapAndReconnect();
     return;
   }
 
   if (!socketOk) {
     // Socket is down - wait for auto-reconnect
-    log('等待信令重连...', 'warn');
+    log('Waiting for signaling reconnect...', 'warn');
     networkRecoveryState.isRecovering = false;
     // Socket.io will auto-reconnect and trigger autoRejoin via 'connect' event
   }
@@ -853,7 +864,7 @@ function checkAndRecoverConnections() {
 
 function requestNewBootstrapAndReconnect() {
   if (!socket || !socket.connected) {
-    log('无法获取引导节点: 信令未连接', 'error');
+    log('Cannot get bootstrap: signaling not connected', 'error');
     networkRecoveryState.isRecovering = false;
     return;
   }
@@ -868,13 +879,13 @@ function requestNewBootstrapAndReconnect() {
     if (res.error) {
       // Check if room/publisher is gone
       if (res.error.indexOf('不存在') >= 0 || res.error.indexOf('无主播') >= 0) {
-        log('主播已离开房间: ' + res.error, 'warn');
+        log('Publisher left room: ' + res.error, 'warn');
         alert(t('liveEnded'));
         cleanup();
         switchTab('lobby');
         return;
       }
-      log('获取引导节点失败: ' + res.error, 'error');
+      log('Failed to get bootstrap: ' + res.error, 'error');
       networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
       return;
@@ -885,16 +896,16 @@ function requestNewBootstrapAndReconnect() {
     
     // Check if publisher is offline
     if (publisherOffline) {
-      log('主播当前离线，等待重连...', 'warn');
+      log('Publisher offline, waiting for reconnect...', 'warn');
     }
     
-    log('收到 ' + bootstrapNodes.length + ' 个引导节点 (网络恢复)' + (publisherOffline ? ' [主播离线]' : ''));
+    log('Received ' + bootstrapNodes.length + ' bootstrap nodes (network recovery)' + (publisherOffline ? ' [publisher offline]' : ''));
 
     if (bootstrapNodes.length === 0) {
       if (publisherOffline) {
-        log('主播离线且无可用节点，等待主播重连...', 'warn');
+        log('Publisher offline, no available nodes, waiting...', 'warn');
       } else {
-        log('无可用引导节点', 'error');
+        log('No available bootstrap nodes', 'error');
       }
       networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
@@ -917,7 +928,7 @@ function requestNewBootstrapAndReconnect() {
 
     // Connect to first bootstrap node as primary
     primaryParentId = bootstrapNodes[0].peerId || bootstrapNodes[0].socketId;
-    log('网络恢复: 连接到 ' + peerTag(primaryParentId));
+    log('Network recovery: connecting to ' + peerTag(primaryParentId));
     await connectToParent(primaryParentId, 'primary');
 
     // Setup backups after primary connects
@@ -937,34 +948,34 @@ function initSocket() {
   socket = io();
   initNetworkChangeDetection(); // Add network change detection
   socket.on('connect', function() {
-    log('已连接信令服务器 id=' + socket.id);
+    log('Connected to signaling server id=' + socket.id);
     if (myRole && currentRoomId) {
-      log('检测到信令重连，自动重新加入 room=' + currentRoomId, 'warn');
+      log('Signaling reconnected, auto-rejoin room=' + currentRoomId, 'warn');
       autoRejoin();
     }
   });
   // SDP/ICE relay from signaling server (for initial connections)
   socket.on('signal', async function(d) {
-    try { await handleSignal(d.fromId, d.data); } catch(e) { log('信令错误: ' + e.message, 'error'); }
+    try { await handleSignal(d.fromId, d.data); } catch(e) { log('Signal error: ' + e.message, 'error'); }
   });
   socket.on('roomList', function(list) { renderRoomList(list); });
   socket.on('roomClosed', function() {
-    log('房间已关闭，主播已离开', 'warn');
+    log('Room closed, publisher left', 'warn');
     alert(t('liveEndedFull'));
     cleanup();
     switchTab('lobby');
   });
   socket.on('publisherOffline', function(d) {
-    log('主播暂时离线，等待重连 (' + Math.round(d.graceMs / 1000) + '秒)', 'warn');
+    log('Publisher temporarily offline, reconnect grace (' + Math.round(d.graceMs / 1000) + 's)', 'warn');
     showReconnectOverlay(true);
   });
   socket.on('publisherReconnected', function(d) {
-    log('主播已重连 ' + peerTag(d.publisherId));
+    log('Publisher reconnected ' + peerTag(d.publisherId));
     peerNicknames[d.publisherId] = d.nickname;
     showReconnectOverlay(false);
     // Try to reconnect to the new publisher
     if (myRole === 'viewer' && !primaryParentId) {
-      log('尝试连接到重连的主播...', 'warn');
+      log('Trying to connect to reconnected publisher...', 'warn');
       primaryParentId = d.publisherId;
       topologyMap.set(d.publisherId, {
         peerId: d.publisherId, nickname: d.nickname, role: 'publisher',
@@ -976,7 +987,7 @@ function initSocket() {
     }
   });
   socket.on('peerJoined', function(d) {
-    log('新节点加入: ' + peerTag(d.peerId) + ' (' + d.nickname + ')');
+    log('New peer joined: ' + peerTag(d.peerId) + ' (' + d.nickname + ')');
     peerNicknames[d.peerId] = d.nickname;
     // Seed topology with minimal info so backup selection can find this peer
     if (!topologyMap.has(d.peerId)) {
@@ -986,11 +997,11 @@ function initSocket() {
         linkTypes: {}, isReady: false, joinedAt: Date.now(),
         fanoutMax: MAX_FANOUT, fanoutAvailable: MAX_FANOUT, updatedAt: Date.now()
       });
-      log('拓扑种子: 添加 ' + peerTag(d.peerId) + ' topo=' + topologyMap.size, 'debug');
+      log('Topo seed: added ' + peerTag(d.peerId) + ' topo=' + topologyMap.size, 'debug');
     }
   });
   socket.on('peerLeft', function(d) {
-    log('节点离开: ' + peerTag(d.peerId));
+    log('Peer left: ' + peerTag(d.peerId));
     handlePeerLeft(d.peerId);
   });
   socket.on('chatMessage', function(msg) {
@@ -1000,21 +1011,21 @@ function initSocket() {
   });
   socket.on('reaction', function(d) { showReactionFloat(d.emoji); });
   socket.on('disconnect', function(reason) {
-    log('信令断开: ' + reason, 'error');
+    log('Signaling disconnected: ' + reason, 'error');
     // Socket.io will auto-reconnect, but we need to handle the case where
     // all WebRTC connections also died (network switch scenario)
     networkRecoveryState.lastNetworkChange = Date.now();
   });
   socket.on('reconnect', function(attemptNumber) {
-    log('信令重连成功 (尝试 ' + attemptNumber + ' 次)', 'warn');
+    log('Signaling reconnected (attempt ' + attemptNumber + ' times)', 'warn');
   });
   socket.on('reconnect_attempt', function(attemptNumber) {
     if (attemptNumber === 1) {
-      log('信令重连中...', 'warn');
+      log('Signaling reconnecting...', 'warn');
     }
   });
   socket.on('reconnect_failed', function() {
-    log('信令重连失败，请刷新页面', 'error');
+    log('Signaling reconnect failed, please refresh', 'error');
   });
 }
 
@@ -1033,7 +1044,7 @@ function handlePeerLeft(peerId) {
     if (ci.peerId === peerId) toClose.push(key);
   });
   if (toClose.length > 0) {
-    log('关闭与 ' + peerTag(peerId) + ' 的 ' + toClose.length + ' 个连接: [' + toClose.join(', ') + ']');
+    log('Closing ' + toClose.length + ' connections with ' + peerTag(peerId) + ': [' + toClose.join(', ') + ']');
   }
   toClose.forEach(function(key) {
     var ci = connections.get(key);
@@ -1044,7 +1055,7 @@ function handlePeerLeft(peerId) {
 
   // If this was our primary parent, failover
   if (peerId === primaryParentId) {
-    log('主父节点离开: ' + peerTag(peerId) + '，触发故障转移', 'warn');
+    log('Primary parent left: ' + peerTag(peerId) + ', triggering failover', 'warn');
     primaryParentId = null;
     promoteOrFindNewPrimary();
   }
@@ -1053,7 +1064,7 @@ function handlePeerLeft(peerId) {
   var bIdx = backupParents.indexOf(peerId);
   if (bIdx >= 0) {
     backupParents.splice(bIdx, 1);
-    log('备用父节点离开: ' + peerTag(peerId) + '，寻找替代', 'warn');
+    log('Backup parent left: ' + peerTag(peerId) + ', finding replacement', 'warn');
     maybeAdjustBackups();
   }
 
@@ -1070,7 +1081,7 @@ var failoverInProgress = false; // Prevent race with network recovery
 async function promoteOrFindNewPrimary() {
   // Prevent race condition with network recovery
   if (failoverInProgress) {
-    log('故障转移已在进行中，跳过', 'debug');
+    log('Failover already in progress, skip', 'debug');
     return;
   }
   failoverInProgress = true;
@@ -1079,7 +1090,7 @@ async function promoteOrFindNewPrimary() {
   resetHealthState();
 
   // Log all backup states for debugging
-  log('故障转移开始: backups=[' + backupParents.map(function(bpId, i) {
+  log('Failover start: backups=[' + backupParents.map(function(bpId, i) {
     var bc = getConn(bpId, 'backup-' + i);
     return peerTag(bpId) + '(ice=' + (bc ? bc.iceState : 'no-conn') + ',stream=' + (bc && bc.stream ? bc.stream.getTracks().length + 'tracks' : 'none') + ')';
   }).join(', ') + ']', 'warn');
@@ -1090,7 +1101,7 @@ async function promoteOrFindNewPrimary() {
     var bRole = 'backup-' + i;
     var bc = getConn(bpId, bRole);
     if (bc && (bc.iceState === 'connected' || bc.iceState === 'completed')) {
-      log('提升备用 ' + peerTag(bpId) + ' 为主连接');
+      log('Promoting backup ' + peerTag(bpId) + ' to primary');
       // Re-key
       deleteConn(bpId, bRole);
       pendingConnects.delete(connKey(bpId, bRole));
@@ -1105,9 +1116,9 @@ async function promoteOrFindNewPrimary() {
         showRemoteVideo(bpId, receivedStream);
         replaceTracksOnChildren(receivedStream);
         showReconnectOverlay(false);
-        log('故障转移完成 (备用提升)');
+        log('Failover complete (backup promoted)');
       } else {
-        log('备用连接无流，重新建立', 'warn');
+        log('Backup has no stream, re-establishing', 'warn');
         bc.pc.close(); deleteConn(bpId, 'primary');
         await connectToParent(bpId, 'primary');
       }
@@ -1121,7 +1132,7 @@ async function promoteOrFindNewPrimary() {
   }
 
   // No usable backup — find new parent from topology
-  log('无可用备用，从拓扑中选择新父节点', 'warn');
+  log('No usable backup, selecting new parent from topology', 'warn');
   var excludeList = [myPeerId];
   backupParents.forEach(function(bp) { excludeList.push(bp); });
   // Also exclude any peer we already have a child connection to —
@@ -1134,12 +1145,12 @@ async function promoteOrFindNewPrimary() {
   var newParent = selectBestParent(excludeList);
   if (newParent) {
     primaryParentId = newParent;
-    log('选择新主父节点: ' + peerTag(newParent));
+    log('Selected new primary parent: ' + peerTag(newParent));
     await connectToParent(newParent, 'primary');
     maybeAdjustBackups();
     broadcastGossip();
   } else {
-    log('无可用父节点，等待拓扑更新...', 'error');
+    log('No available parent, waiting for topology update...', 'error');
     // Will retry on next gossip update
   }
   showReconnectOverlay(false);
@@ -1157,16 +1168,16 @@ function maybeAdjustBackups() {
   if (current >= desired) {
     var backupStatus = current + '/' + desired + ':' + backupParents.join(',');
     if (backupStatus !== prevLogState.backupStatus) {
-      log('备用连接充足: ' + current + '/' + desired + ' [' + backupParents.map(peerTag).join(', ') + ']', 'debug');
+      log('Backup connections sufficient: ' + current + '/' + desired + ' [' + backupParents.map(peerTag).join(', ') + ']', 'debug');
       prevLogState.backupStatus = backupStatus;
     }
     return;
   }
 
-  // Only log "不足" when status actually changes
+  // Only log "insufficient" when status actually changes
   var insufficientStatus = 'insufficient:' + current + '/' + desired;
   if (insufficientStatus !== prevLogState.backupStatus) {
-    log('备用连接不足: ' + current + '/' + desired + '，寻找新备用', 'debug');
+    log('Backup connections insufficient: ' + current + '/' + desired + ', finding new backups', 'debug');
   }
   prevLogState.backupStatus = insufficientStatus;
 
@@ -1194,7 +1205,11 @@ function maybeAdjustBackups() {
   });
 
   if (dependentExcluded.length > 0 || childExcluded.length > 0) {
-    log('备用排除: 依赖=[' + dependentExcluded.join(',') + '] 子节点=[' + childExcluded.join(',') + ']', 'debug');
+    var excludeKey = 'dep=' + dependentExcluded.join(',') + '|ch=' + childExcluded.join(',');
+    if (excludeKey !== prevLogState.backupExclude) {
+      log('Backup exclude: dependent=[' + dependentExcluded.join(',') + '] children=[' + childExcluded.join(',') + ']', 'debug');
+      prevLogState.backupExclude = excludeKey;
+    }
   }
 
   // First pass: exclude mutual-backup peers (prefer non-circular backups)
@@ -1208,17 +1223,21 @@ function maybeAdjustBackups() {
 
   // If no candidates without mutual backup, allow mutual backup as fallback
   if (filteredBackups.length === 0 && mutualBackupExcluded.length > 0) {
-    log('无非互备候选，允许互备: [' + mutualBackupExcluded.map(peerTag).join(',') + ']', 'debug');
+    var mutualKey = mutualBackupExcluded.join(',');
+    if (mutualKey !== prevLogState.mutualBackup) {
+      log('No non-mutual candidates, allowing mutual backup: [' + mutualBackupExcluded.map(peerTag).join(',') + ']', 'debug');
+      prevLogState.mutualBackup = mutualKey;
+    }
     filteredBackups = newBackups.filter(function(bpId) {
       return excludeIds.indexOf(bpId) < 0;
     });
   }
 
   filteredBackups.forEach(function(bpId) {
-    if (backupParents.indexOf(bpId) >= 0) { log('跳过已有备用: ' + peerTag(bpId), 'debug'); return; }
+    if (backupParents.indexOf(bpId) >= 0) { log('Skip existing backup: ' + peerTag(bpId), 'debug'); return; }
     var bIdx = backupParents.length;
     backupParents.push(bpId);
-    log('建立备用连接 backup-' + bIdx + ': ' + peerTag(bpId));
+    log('Establishing backup connection backup-' + bIdx + ': ' + peerTag(bpId));
     connectToParent(bpId, 'backup-' + bIdx);
   });
 
@@ -1226,7 +1245,7 @@ function maybeAdjustBackups() {
     // Key on exclude/mutual counts only — topo size fluctuates and causes spam
     var noBackupReason = 'exclude=' + excludeIds.length + ',mutual=' + mutualBackupExcluded.length;
     if (noBackupReason !== prevLogState.noBackupReason) {
-      log('无可用备用候选 (拓扑=' + topologyMap.size + '节点, 排除=' + excludeIds.length + ', 互备排除=' + mutualBackupExcluded.length + ')', 'debug');
+      log('No backup candidates (topo=' + topologyMap.size + 'nodes, excluded=' + excludeIds.length + ', mutual-excluded=' + mutualBackupExcluded.length + ')', 'debug');
       prevLogState.noBackupReason = noBackupReason;
     }
   } else {
@@ -1239,19 +1258,19 @@ function maybeAdjustBackups() {
 // ============================================================
 async function connectToParent(targetId, role) {
   var key = connKey(targetId, role);
-  if (pendingConnects.has(key)) { log('跳过重复连接: ' + peerTag(targetId) + ' role=' + role, 'warn'); return; }
+  if (pendingConnects.has(key)) { log('Skip duplicate connection: ' + peerTag(targetId) + ' role=' + role, 'warn'); return; }
 
   var existing = getConn(targetId, role);
   if (existing) {
     var eIce = existing.pc.iceConnectionState;
-    if (eIce === 'connected' || eIce === 'completed') { log('跳过(已连接): ' + peerTag(targetId) + ' ' + role, 'warn'); return; }
-    if (existing.pc.signalingState === 'stable' && (eIce === 'checking' || eIce === 'new')) { log('跳过(等待ICE): ' + peerTag(targetId) + ' ' + role, 'warn'); return; }
+    if (eIce === 'connected' || eIce === 'completed') { log('Skip(connected): ' + peerTag(targetId) + ' ' + role, 'warn'); return; }
+    if (existing.pc.signalingState === 'stable' && (eIce === 'checking' || eIce === 'new')) { log('Skip(waiting ICE): ' + peerTag(targetId) + ' ' + role, 'warn'); return; }
     existing.pc.close(); deleteConn(targetId, role);
   }
 
   pendingConnects.add(key);
   var config = getIceConfig();
-  log('创建PeerConnection(' + role + ') -> ' + peerTag(targetId) + ' iceServers=' + config.iceServers.length + ' policy=' + (config.iceTransportPolicy || 'all'), 'debug');
+  log('Create PeerConnection(' + role + ') -> ' + peerTag(targetId) + ' iceServers=' + config.iceServers.length + ' policy=' + (config.iceTransportPolicy || 'all'), 'debug');
   var pc = new RTCPeerConnection(config);
   var ci = { pc: pc, role: role, dc: null, iceState: 'new', stats: {}, stream: null, peerId: targetId, createdAt: Date.now() };
   setConn(targetId, role, ci);
@@ -1262,7 +1281,7 @@ async function connectToParent(targetId, role) {
   var dc = pc.createDataChannel('data', { ordered: true });
   ci.dc = dc;
   dc.onopen = function() {
-    log('DataChannel(' + role + ') 打开 -> ' + peerTag(targetId));
+    log('DataChannel(' + role + ') open -> ' + peerTag(targetId));
     // Detect link type once connected
     detectLinkType(pc, targetId);
     // Send RTT probe
@@ -1271,8 +1290,8 @@ async function connectToParent(targetId, role) {
     try { dc.send(JSON.stringify({ type: 'request-topology' })); } catch(e) {}
   };
   dc.onmessage = function(e) { handleDcMessage(JSON.parse(e.data), targetId); };
-  dc.onclose = function() { log('DataChannel(' + role + ') 关闭 -> ' + peerTag(targetId), 'warn'); };
-  dc.onerror = function(e) { log('DataChannel(' + role + ') 错误 -> ' + peerTag(targetId) + ': ' + (e.error ? e.error.message : 'unknown'), 'error'); };
+  dc.onclose = function() { log('DataChannel(' + role + ') closed -> ' + peerTag(targetId), 'warn'); };
+  dc.onerror = function(e) { log('DataChannel(' + role + ') error -> ' + peerTag(targetId) + ': ' + (e.error ? e.error.message : 'unknown'), 'error'); };
 
   pc.onicecandidate = function(e) {
     if (e.candidate) relaySdpSignal(targetId, { type: 'candidate', candidate: e.candidate, connRole: role });
@@ -1290,7 +1309,7 @@ async function connectToParent(targetId, role) {
       // Flush pending candidate count log
       var candKey = targetId + ':' + role;
       if (candidateCounts[candKey]) {
-        log('信令发送(socket): ' + candidateCounts[candKey] + ' candidates -> ' + peerTag(targetId) + ' role=' + role, 'debug');
+        log('Signal(socket): ' + candidateCounts[candKey] + ' candidates -> ' + peerTag(targetId) + ' role=' + role, 'debug');
         delete candidateCounts[candKey];
       }
       if (role === 'primary') showReconnectOverlay(false);
@@ -1298,11 +1317,11 @@ async function connectToParent(targetId, role) {
     if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
       pendingConnects.delete(key);
     }
-    if (pc.iceConnectionState === 'failed') { log('ICE失败 ' + peerTag(targetId) + '，重启...', 'warn'); pc.restartIce(); }
+    if (pc.iceConnectionState === 'failed') { log('ICE failed ' + peerTag(targetId) + ', restarting...', 'warn'); pc.restartIce(); }
   };
 
   pc.ontrack = function(e) {
-    log('收到轨道(' + role + '): ' + e.track.kind + ' from ' + peerTag(targetId));
+    log('Track received(' + role + '): ' + e.track.kind + ' from ' + peerTag(targetId));
     var remoteStream = (e.streams && e.streams[0]) ? e.streams[0] : null;
     if (remoteStream) { ci.stream = remoteStream; }
     else { if (!ci.stream) ci.stream = new MediaStream(); ci.stream.addTrack(e.track); }
@@ -1314,7 +1333,7 @@ async function connectToParent(targetId, role) {
         // Mark ourselves as ready in topology
         if (myNodeState) myNodeState.isReady = true;
         broadcastGossip();
-        log('已标记为可转发节点');
+        log('Marked as relay-ready node');
       }
     }
   };
@@ -1322,7 +1341,7 @@ async function connectToParent(targetId, role) {
   var offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   relaySdpSignal(targetId, { type: 'offer', sdp: pc.localDescription, connRole: role });
-  log('发送 offer(' + role + ') -> ' + peerTag(targetId) + ' [key=' + key + ']');
+  log('Send offer(' + role + ') -> ' + peerTag(targetId) + ' [key=' + key + ']');
 }
 
 // ============================================================
@@ -1340,13 +1359,13 @@ async function handleSignal(fromId, data) {
     if (pendingConnects.has(mirrorKey)) {
       if (myPeerId < fromId) {
         // We are polite — drop our outgoing offer, accept theirs
-        log('Offer冲突(我让步): 关闭我方offer ' + mirrorKey, 'warn');
+        log('Offer conflict(I yield): closing my offer ' + mirrorKey, 'warn');
         var ourOutgoing = getConn(fromId, childTag);
         if (ourOutgoing) { ourOutgoing.pc.close(); deleteConn(fromId, childTag); }
         pendingConnects.delete(mirrorKey);
       } else {
         // We are impolite — ignore their offer, keep ours
-        log('Offer冲突(对方让步): 忽略来自 ' + peerTag(fromId) + ' 的offer', 'warn');
+        log('Offer conflict(they yield): ignoring offer from ' + peerTag(fromId), 'warn');
         return;
       }
     }
@@ -1371,10 +1390,10 @@ async function handleSignal(fromId, data) {
           if (ns.isReady && ns.fanoutAvailable > 0) altCandidates++;
         });
         if (altCandidates > 0) {
-          log('拒绝互备offer: 我已有到 ' + peerTag(fromId) + ' 的 ' + childTag + ' 连接(ice=' + outIce + ')，对方有 ' + altCandidates + ' 个替代候选 (topo=' + topologyMap.size + ')', 'warn');
+          log('Reject mutual-backup offer: already have ' + childTag + ' to ' + peerTag(fromId) + ' (ice=' + outIce + '), peer has ' + altCandidates + ' alt candidates (topo=' + topologyMap.size + ')', 'warn');
           return;
         } else {
-          log('允许互备offer(无替代候选): ' + peerTag(fromId) + ' ' + childTag + ' altCandidates=0 (topo=' + topologyMap.size + ')', 'debug');
+          log('Allow mutual-backup offer(no alt candidates): ' + peerTag(fromId) + ' ' + childTag + ' altCandidates=0 (topo=' + topologyMap.size + ')', 'debug');
         }
       }
     }
@@ -1402,17 +1421,17 @@ async function handleSignal(fromId, data) {
       });
       
       // Always reject when at capacity - this enforces proper tree distribution
-      log('拒绝offer(扇出已满): ' + peerTag(fromId) + ' 当前子节点=' + currentChildCount + '/' + MAX_FANOUT + ' 可选父节点=[' + alternativeParents.slice(0, 3).join(',') + ']', 'warn');
+      log('Reject offer(fanout full): ' + peerTag(fromId) + ' children=' + currentChildCount + '/' + MAX_FANOUT + ' alt parents=[' + alternativeParents.slice(0, 3).join(',') + ']', 'warn');
       // Send rejection message so the requester knows to try elsewhere
       relaySdpSignal(fromId, { type: 'reject', reason: 'fanout-full', connRole: childTag, alternatives: alternativeParents.slice(0, 5) });
       return;
     }
 
-    log('收到 offer from ' + peerTag(fromId) + ' (角色:' + childTag + ', key=' + connKey(fromId, ourKey) + ')');
+    log('Received offer from ' + peerTag(fromId) + ' (role:' + childTag + ', key=' + connKey(fromId, ourKey) + ')');
 
     var existingChild = getConn(fromId, ourKey);
     if (existingChild) {
-      log('关闭旧子连接: ' + connKey(fromId, ourKey), 'warn');
+      log('Closing old child connection: ' + connKey(fromId, ourKey), 'warn');
       existingChild.pc.close(); deleteConn(fromId, ourKey);
     }
 
@@ -1426,7 +1445,7 @@ async function handleSignal(fromId, data) {
     };
     pc.oniceconnectionstatechange = function() {
       ci.iceState = pc.iceConnectionState;
-      log('ICE(子-' + childTag + ') ' + peerTag(fromId) + ': ' + pc.iceConnectionState);
+      log('ICE(child-' + childTag + ') ' + peerTag(fromId) + ': ' + pc.iceConnectionState);
       if (pc.iceConnectionState === 'disconnected') { ci.disconnectedAt = ci.disconnectedAt || Date.now(); }
       else { ci.disconnectedAt = null; }
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
@@ -1443,16 +1462,16 @@ async function handleSignal(fromId, data) {
     pc.ondatachannel = function(e) {
       ci.dc = e.channel;
       e.channel.onmessage = function(ev) { handleDcMessage(JSON.parse(ev.data), fromId); };
-      e.channel.onclose = function() { log('DataChannel(子-' + childTag + ') 关闭 <- ' + peerTag(fromId), 'warn'); };
-      e.channel.onerror = function(err) { log('DataChannel(子-' + childTag + ') 错误 <- ' + peerTag(fromId) + ': ' + (err.error ? err.error.message : 'unknown'), 'error'); };
+      e.channel.onclose = function() { log('DataChannel(child-' + childTag + ') closed <- ' + peerTag(fromId), 'warn'); };
+      e.channel.onerror = function(err) { log('DataChannel(child-' + childTag + ') error <- ' + peerTag(fromId) + ': ' + (err.error ? err.error.message : 'unknown'), 'error'); };
     };
 
     var stream = myRole === 'publisher' ? localStream : receivedStream;
     if (stream && stream.getTracks().length > 0) {
       stream.getTracks().forEach(function(t) { pc.addTrack(t, stream); });
-      log('添加 ' + stream.getTracks().length + ' 轨道 -> ' + peerTag(fromId));
+      log('Adding ' + stream.getTracks().length + ' tracks -> ' + peerTag(fromId));
     } else {
-      log('无可发送流 -> ' + peerTag(fromId), 'warn');
+      log('No stream to send -> ' + peerTag(fromId), 'warn');
     }
 
     await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -1465,13 +1484,13 @@ async function handleSignal(fromId, data) {
     }
     var answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    log('发送 answer -> ' + peerTag(fromId) + ' connRole=' + childTag);
+    log('Send answer -> ' + peerTag(fromId) + ' connRole=' + childTag);
     relaySdpSignal(fromId, { type: 'answer', sdp: pc.localDescription, connRole: childTag });
 
   } else if (data.type === 'answer') {
     var role = data.connRole || 'primary';
     var c = getConn(fromId, role);
-    log('收到 answer from ' + peerTag(fromId) + ' role=' + role + ' found=' + (!!c) + ' sig=' + (c ? c.pc.signalingState : 'N/A'));
+    log('Received answer from ' + peerTag(fromId) + ' role=' + role + ' found=' + (!!c) + ' sig=' + (c ? c.pc.signalingState : 'N/A'));
     if (c) {
       if (c.pc.signalingState === 'have-local-offer') {
         await c.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -1482,14 +1501,14 @@ async function handleSignal(fromId, data) {
           }
           c._candidateQueue = [];
         }
-        log('设置answer成功: ' + peerTag(fromId) + ' role=' + role);
+        log('Answer set OK: ' + peerTag(fromId) + ' role=' + role);
       } else {
-        log('跳过answer(状态=' + c.pc.signalingState + '): ' + peerTag(fromId), 'warn');
+        log('Skip answer(state=' + c.pc.signalingState + '): ' + peerTag(fromId), 'warn');
       }
     } else {
       var allKeys = [];
       connections.forEach(function(ci, key) { allKeys.push(key); });
-      log('answer找不到连接: ' + peerTag(fromId) + ' role=' + role + ' conns=[' + allKeys.join(', ') + ']', 'warn');
+      log('Answer: connection not found: ' + peerTag(fromId) + ' role=' + role + ' conns=[' + allKeys.join(', ') + ']', 'warn');
     }
 
   } else if (data.type === 'candidate') {
@@ -1508,18 +1527,18 @@ async function handleSignal(fromId, data) {
       if (!c2.pc.remoteDescription) {
         if (!c2._candidateQueue) c2._candidateQueue = [];
         c2._candidateQueue.push(data.candidate);
-        log('ICE候选排队: ' + peerTag(fromId) + ' role=' + cRole + ' queue=' + c2._candidateQueue.length + ' (等待remoteDesc)', 'debug');
+        log('ICE candidate queued: ' + peerTag(fromId) + ' role=' + cRole + ' queue=' + c2._candidateQueue.length + ' (waiting remoteDesc)', 'debug');
       } else {
         await c2.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
       }
     } else {
-      log('ICE候选丢弃: 找不到连接 ' + peerTag(fromId) + ' role=' + cRole, 'warn');
+      log('ICE candidate dropped: no connection ' + peerTag(fromId) + ' role=' + cRole, 'warn');
     }
 
   } else if (data.type === 'reject') {
     // Our connection request was rejected (e.g., target at fanout capacity)
     var rejRole = data.connRole || 'primary';
-    log('连接被拒绝: ' + peerTag(fromId) + ' role=' + rejRole + ' reason=' + data.reason, 'warn');
+    log('Connection rejected: ' + peerTag(fromId) + ' role=' + rejRole + ' reason=' + data.reason, 'warn');
     
     // Mark this peer as rejected (cooldown)
     markPeerRejected(fromId);
@@ -1535,7 +1554,7 @@ async function handleSignal(fromId, data) {
     // If this was our primary, try to find an alternative
     if (rejRole === 'primary' && fromId === primaryParentId) {
       primaryParentId = null;
-      log('主连接被拒绝，寻找替代父节点...', 'warn');
+      log('Primary rejected, finding alternative parent...', 'warn');
       
       // Try alternatives suggested by the rejecting peer (skip those in cooldown)
       if (data.alternatives && data.alternatives.length > 0) {
@@ -1548,7 +1567,7 @@ async function handleSignal(fromId, data) {
             }
           });
           if (altId) {
-            log('尝试替代父节点: ' + peerTag(altId));
+            log('Trying alternative parent: ' + peerTag(altId));
             primaryParentId = altId;
             connectToParent(altId, 'primary');
             return;
@@ -1568,11 +1587,11 @@ async function handleSignal(fromId, data) {
       var newParent = selectBestParent(excludeIds);
       if (newParent) {
         primaryParentId = newParent;
-        log('选择新主父节点: ' + peerTag(newParent));
+        log('Selected new primary parent: ' + peerTag(newParent));
         connectToParent(newParent, 'primary');
       } else {
         // No parent available - wait for cooldown to expire and retry
-        log('所有节点已满或在冷却中，等待 ' + (REJECTION_COOLDOWN / 1000) + ' 秒后重试...', 'warn');
+        log('All nodes full or in cooldown, waiting ' + (REJECTION_COOLDOWN / 1000) + 's to retry...', 'warn');
         showReconnectOverlay(true);
         setTimeout(function() {
           if (!primaryParentId) {
@@ -1587,12 +1606,12 @@ async function handleSignal(fromId, data) {
             var retryParent = selectBestParent([myPeerId]);
             if (retryParent) {
               primaryParentId = retryParent;
-              log('冷却结束，重试连接到: ' + peerTag(retryParent));
+              log('Cooldown ended, retrying: ' + peerTag(retryParent));
               connectToParent(retryParent, 'primary');
               showReconnectOverlay(false);
             } else {
               // Still no parent - request fresh bootstrap from server
-              log('仍无可用父节点，请求新引导节点...', 'warn');
+              log('Still no available parent, requesting new bootstrap...', 'warn');
               requestNewBootstrapAndReconnect();
             }
           }
@@ -1604,7 +1623,7 @@ async function handleSignal(fromId, data) {
     var backupIdx = backupParents.indexOf(fromId);
     if (backupIdx >= 0) {
       backupParents.splice(backupIdx, 1);
-      log('备用连接被拒绝，寻找替代...', 'warn');
+      log('Backup rejected, finding alternative...', 'warn');
       // Don't immediately retry - let maybeAdjustBackups handle it with cooldown
       setTimeout(function() {
         maybeAdjustBackups();
@@ -1636,7 +1655,7 @@ function handleDcMessage(msg, fromId) {
   }
   else if (msg.type === 'node-leaving') { handlePeerLeft(msg.peerId); }
   else if (msg.type === 'quality-alert') { handleQualityAlert(msg, fromId); }
-  else { log('DC未知消息类型: ' + msg.type + ' from ' + peerTag(fromId), 'debug'); }
+  else { log('DC unknown msg type: ' + msg.type + ' from ' + peerTag(fromId), 'debug'); }
 }
 
 function sendTopologyResponse(targetPeerId) {
@@ -1659,7 +1678,7 @@ function handleTopologyResponse(msg) {
       merged++;
     }
   });
-  log('拓扑响应: 收到 ' + msg.nodes.length + ' 节点, 合并 ' + merged + ', 总计 ' + topologyMap.size, 'debug');
+  log('Topo response: received ' + msg.nodes.length + ' nodes, merged ' + merged + ', total ' + topologyMap.size, 'debug');
   updateTopologyUI();
   // Now that we have topology, adjust backups if needed
   if (myRole === 'viewer') maybeAdjustBackups();
@@ -1679,10 +1698,10 @@ function broadcastDc(msg, excludeId) {
 function handleQualityAlert(msg, fromId) {
   // A parent is telling us their quality is degrading
   if (msg.severity === 'severe' && fromId === primaryParentId) {
-    log('父节点 ' + peerTag(fromId) + ' 严重质量下降，切换到备用', 'warn');
+    log('Parent ' + peerTag(fromId) + ' severe quality drop, switching to backup', 'warn');
     promoteOrFindNewPrimary();
   } else if (msg.severity === 'moderate') {
-    log('父节点 ' + peerTag(fromId) + ' 中度质量下降，准备备用连接', 'warn');
+    log('Parent ' + peerTag(fromId) + ' moderate quality drop, preparing backup', 'warn');
     maybeAdjustBackups();
   }
 }
@@ -1696,10 +1715,10 @@ function replaceTracksOnChildren(newStream) {
     var senders = conn.pc.getSenders();
     newStream.getTracks().forEach(function(track) {
       var sender = senders.find(function(s) { return s.track && s.track.kind === track.kind; });
-      if (sender) { sender.replaceTrack(track).catch(function(e) { log('替换子轨道失败: ' + peerTag(conn.peerId) + ' ' + e.message, 'warn'); }); replaced++; }
+      if (sender) { sender.replaceTrack(track).catch(function(e) { log('Replace child track failed: ' + peerTag(conn.peerId) + ' ' + e.message, 'warn'); }); replaced++; }
     });
   });
-  if (total > 0) log('替换子节点轨道: ' + replaced + ' tracks across ' + total + ' children', 'debug');
+  if (total > 0) log('Replace child tracks: ' + replaced + ' tracks across ' + total + ' children', 'debug');
 }
 
 // ============================================================
@@ -1714,8 +1733,8 @@ async function startPublish() {
     localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
     cameraStream = localStream;
     document.getElementById('localVideo').srcObject = localStream;
-    log('已获取本地音视频流');
-  } catch(e) { log('获取媒体失败: ' + e.message, 'error'); return; }
+    log('Local media stream acquired');
+  } catch(e) { log('Failed to get media: ' + e.message, 'error'); return; }
 
   socket.emit('createRoom', {
     roomId: roomId,
@@ -1723,7 +1742,7 @@ async function startPublish() {
     password: document.getElementById('roomPassword').value,
     nickname: myNickname
   }, function(res) {
-    if (res.error) return log('创建房间失败: ' + res.error, 'error');
+    if (res.error) return log('Failed to create room: ' + res.error, 'error');
     myPeerId = res.peerId;
     myRole = 'publisher';
     currentRoomId = roomId;
@@ -1735,7 +1754,7 @@ async function startPublish() {
     topologyMap.set(myPeerId, myNodeState);
     peerNicknames[myPeerId] = myNickname;
 
-    log('房间 ' + roomId + ' 创建成功' + (res.reconnected ? ' (重连)' : ''));
+    log('Room ' + roomId + ' created' + (res.reconnected ? ' (reconnected)' : ''));
     document.getElementById('publisherArea').style.display = '';
     document.getElementById('noLiveArea').style.display = 'none';
     document.getElementById('publisherStatus').innerHTML = t('roomLabel') + ': <span>' + roomId + '</span> | <span>' + myNickname + '</span>';
@@ -1781,8 +1800,8 @@ async function toggleScreenShare() {
     isScreenSharing = true;
     document.getElementById('screenShareBanner').style.display = '';
     document.getElementById('btnScreenShare').textContent = t('screenShareRestore');
-    log('已开始屏幕共享');
-  } catch(e) { log('屏幕共享失败: ' + e.message, 'error'); }
+    log('Screen sharing started');
+  } catch(e) { log('Screen share failed: ' + e.message, 'error'); }
 }
 
 async function stopScreenShare() {
@@ -1792,7 +1811,7 @@ async function stopScreenShare() {
   var camTrack = savedCameraTrack;
   if (!camTrack || camTrack.readyState === 'ended') {
     try { var nc = await navigator.mediaDevices.getUserMedia({ video: getMediaConstraints().video }); camTrack = nc.getVideoTracks()[0]; }
-    catch(e) { log('恢复摄像头失败: ' + e.message, 'error'); isScreenSharing = false; return; }
+    catch(e) { log('Restore camera failed: ' + e.message, 'error'); isScreenSharing = false; return; }
   }
   localStream.addTrack(camTrack);
   document.getElementById('localVideo').srcObject = null;
@@ -1806,15 +1825,15 @@ async function stopScreenShare() {
   savedCameraTrack = null; isScreenSharing = false;
   document.getElementById('screenShareBanner').style.display = 'none';
   document.getElementById('btnScreenShare').textContent = t('screenShare');
-  log('已停止屏幕共享');
+  log('Screen sharing stopped');
 }
 
 async function changeResolution() {
   if (myRole !== 'publisher' || !localStream) return;
   var vt = localStream.getVideoTracks()[0];
   if (vt && !isScreenSharing) {
-    try { await vt.applyConstraints(getMediaConstraints().video); log('分辨率已调整'); }
-    catch(e) { log('调整失败: ' + e.message, 'warn'); }
+    try { await vt.applyConstraints(getMediaConstraints().video); log('Resolution adjusted'); }
+    catch(e) { log('Adjust failed: ' + e.message, 'warn'); }
   }
 }
 
@@ -1829,11 +1848,11 @@ async function joinAsViewer() {
   
   // Prevent duplicate join attempts (e.g., double-click)
   if (isJoining) {
-    log('正在加入中，请稍候...', 'warn');
+    log('Joining in progress, please wait...', 'warn');
     return;
   }
   if (myRole === 'viewer' && currentRoomId === roomId) {
-    log('已在房间中', 'warn');
+    log('Already in room', 'warn');
     return;
   }
   
@@ -1849,7 +1868,7 @@ async function joinAsViewer() {
     isJoining = false; // Reset flag
     
     if (res.error) {
-      log('加入失败: ' + res.error, 'error');
+      log('Join failed: ' + res.error, 'error');
       // If room doesn't exist or no host, show dialog and stay in lobby
       if (res.error.indexOf('不存在') >= 0 || res.error.indexOf('无主播') >= 0) {
         alert(t('roomNotExist'));
@@ -1861,7 +1880,7 @@ async function joinAsViewer() {
     
     // Prevent processing if we already joined (race condition)
     if (myRole === 'viewer' && currentRoomId === roomId && primaryParentId) {
-      log('已加入房间，忽略重复回调', 'warn');
+      log('Already joined, ignoring duplicate callback', 'warn');
       return;
     }
     
@@ -1877,7 +1896,7 @@ async function joinAsViewer() {
     peerNicknames[myPeerId] = myNickname;
 
     if (res.chatHistory) res.chatHistory.forEach(function(m) { appendChatMessage(m); });
-    if (res.publisherOffline) log('主播当前离线，等待重连...', 'warn');
+    if (res.publisherOffline) log('Publisher offline, waiting for reconnect...', 'warn');
 
     document.getElementById('viewerArea').style.display = '';
     document.getElementById('noLiveArea').style.display = 'none';
@@ -1885,10 +1904,10 @@ async function joinAsViewer() {
 
     // Phase 4: Connect to bootstrap nodes to get topology, then pick best parent
     var bootstrapNodes = res.bootstrapNodes || [];
-    log('收到 ' + bootstrapNodes.length + ' 个引导节点');
+    log('Received ' + bootstrapNodes.length + ' bootstrap nodes');
 
     if (bootstrapNodes.length === 0) {
-      log('无引导节点可用', 'error');
+      log('No bootstrap nodes available', 'error');
       return;
     }
 
@@ -1926,7 +1945,7 @@ async function joinAsViewer() {
     });
     
     // Log bootstrap node fanout info for debugging
-    log('引导节点: ' + sortedNodes.map(function(n) {
+    log('Bootstrap nodes: ' + sortedNodes.map(function(n) {
       return peerTag(n.peerId || n.socketId) + '(fanout=' + (n.fanoutAvailable !== undefined ? n.fanoutAvailable : '?') + (n.isPublisher ? ',pub' : '') + ')';
     }).join(', '), 'debug');
     
@@ -1943,17 +1962,17 @@ async function joinAsViewer() {
     // Fallback to first node if all are at capacity (will get rejected and retry)
     if (!selectedParent && sortedNodes.length > 0) {
       selectedParent = sortedNodes[0];
-      log('所有节点已满，尝试连接 ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (可能被拒绝)', 'warn');
+      log('All nodes full, trying ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (may be rejected)', 'warn');
     }
     
     if (!selectedParent) {
-      log('无可用引导节点', 'error');
+      log('No available bootstrap nodes', 'error');
       return;
     }
     
-    var parentType = selectedParent.isPublisher ? '主播' : '观众';
+    var parentType = selectedParent.isPublisher ? 'publisher' : 'viewer';
     var parentFanout = selectedParent.fanoutAvailable !== undefined ? selectedParent.fanoutAvailable : '?';
-    log('选择 ' + parentType + ' 作为初始父节点: ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (fanout=' + parentFanout + ')');
+    log('Selected ' + parentType + ' as initial parent: ' + peerTag(selectedParent.peerId || selectedParent.socketId) + ' (fanout=' + parentFanout + ')');
     
     primaryParentId = selectedParent.peerId || selectedParent.socketId;
     peerNicknames[primaryParentId] = selectedParent.nickname;
@@ -2000,22 +2019,22 @@ function optimizeParentIfBetter() {
       return;
     }
     // Publisher is at capacity - check if there's a better option
-    log('主播已满(fanout=' + currentNs.fanoutAvailable + ')，检查是否有更优父节点...', 'debug');
+    log('Publisher full(fanout=' + currentNs.fanoutAvailable + '), checking for better parent...', 'debug');
   }
 
   var currentScore = parentScore(currentNs, primaryParentId, true); // true = is current parent
   var excludeIds = [myPeerId].concat(backupParents);
   var bestId = selectBestParent(excludeIds);
   if (!bestId || bestId === primaryParentId) {
-    log('父节点优化: 无更优选择 (当前=' + peerTag(primaryParentId) + ' score=' + Math.round(currentScore) + ')', 'debug');
+    log('Parent optimize: no better choice (current=' + peerTag(primaryParentId) + ' score=' + Math.round(currentScore) + ')', 'debug');
     return;
   }
   var bestNs = topologyMap.get(bestId);
   var bestScore = parentScore(bestNs, bestId, false);
-  log('父节点优化: 当前=' + peerTag(primaryParentId) + '(score=' + Math.round(currentScore) + ',role=' + (currentNs ? currentNs.role : '?') + ',fanout=' + (currentNs ? currentNs.fanoutAvailable : '?') + ') 最优=' + peerTag(bestId) + '(score=' + Math.round(bestScore) + ',role=' + (bestNs ? bestNs.role : '?') + ',fanout=' + (bestNs ? bestNs.fanoutAvailable : '?') + ') 阈值=' + Math.round(currentScore * 0.8), 'debug');
+  log('Parent optimize: current=' + peerTag(primaryParentId) + '(score=' + Math.round(currentScore) + ',role=' + (currentNs ? currentNs.role : '?') + ',fanout=' + (currentNs ? currentNs.fanoutAvailable : '?') + ') best=' + peerTag(bestId) + '(score=' + Math.round(bestScore) + ',role=' + (bestNs ? bestNs.role : '?') + ',fanout=' + (bestNs ? bestNs.fanoutAvailable : '?') + ') threshold=' + Math.round(currentScore * 0.8), 'debug');
   // Only switch if 20% better (avoid flapping)
   if (bestScore < currentScore * 0.8) {
-    log('发现更优父节点: ' + peerTag(bestId) + ' (score=' + Math.round(bestScore) + ' vs ' + Math.round(currentScore) + ')，迁移中');
+    log('Found better parent: ' + peerTag(bestId) + ' (score=' + Math.round(bestScore) + ' vs ' + Math.round(currentScore) + '), migrating');
     migrateToNewParent(bestId);
   }
 }
@@ -2023,7 +2042,7 @@ function optimizeParentIfBetter() {
 async function migrateToNewParent(newParentId) {
   // Connect to new parent first, then disconnect old
   var oldPrimary = primaryParentId;
-  log('迁移开始: ' + peerTag(oldPrimary) + ' -> ' + peerTag(newParentId));
+  log('Migration start: ' + peerTag(oldPrimary) + ' -> ' + peerTag(newParentId));
   primaryParentId = newParentId;
   await connectToParent(newParentId, 'primary');
 
@@ -2031,17 +2050,17 @@ async function migrateToNewParent(newParentId) {
   setTimeout(function() {
     var newConn = getConn(newParentId, 'primary');
     var newIce = newConn ? newConn.iceState : 'no-conn';
-    log('迁移检查: ' + peerTag(newParentId) + ' ice=' + newIce, 'debug');
+    log('Migration check: ' + peerTag(newParentId) + ' ice=' + newIce, 'debug');
     if (newConn && (newConn.iceState === 'connected' || newConn.iceState === 'completed')) {
       // New connection is good, close old
       if (oldPrimary && oldPrimary !== newParentId) {
         closeConnByRole(oldPrimary, 'primary');
-        log('已迁移: ' + peerTag(oldPrimary) + ' -> ' + peerTag(newParentId));
+        log('Migrated: ' + peerTag(oldPrimary) + ' -> ' + peerTag(newParentId));
       }
       broadcastGossip();
     } else {
       // New connection failed, revert
-      log('迁移失败，恢复旧连接', 'warn');
+      log('Migration failed, restoring old connection', 'warn');
       primaryParentId = oldPrimary;
       closeConnByRole(newParentId, 'primary');
     }
@@ -2072,7 +2091,7 @@ function autoRejoin() {
   var savedRoom = currentRoomId;
   var savedPwd = currentRoomPwd;
   var savedNick = myNickname;
-  log('自动重连: role=' + savedRole + ' room=' + savedRoom + ' nick=' + savedNick, 'warn');
+  log('Auto-rejoin: role=' + savedRole + ' room=' + savedRoom + ' nick=' + savedNick, 'warn');
   // Block network recovery from interfering while we're doing our own reconnection
   networkRecoveryState.isRecovering = true;
   closeAllPeerConnections();
@@ -2085,12 +2104,12 @@ function autoRejoin() {
       password: savedPwd,
       nickname: savedNick
     }, function(res) {
-      if (res.error) { log('主播重连失败: ' + res.error, 'error'); networkRecoveryState.isRecovering = false; showReconnectOverlay(false); return; }
+      if (res.error) { log('Publisher rejoin failed: ' + res.error, 'error'); networkRecoveryState.isRecovering = false; showReconnectOverlay(false); return; }
       myPeerId = res.peerId; myRole = 'publisher';
       if (res.iceConfig) serverIceConfig = res.iceConfig;
       myNodeState = createMyNodeState();
       topologyMap.set(myPeerId, myNodeState);
-      log('主播重连成功 room=' + savedRoom);
+      log('Publisher rejoin OK room=' + savedRoom);
       networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
       broadcastGossip();
@@ -2099,7 +2118,7 @@ function autoRejoin() {
     socket.emit('joinRoom', {
       roomId: savedRoom, password: savedPwd, nickname: savedNick
     }, async function(res) {
-      if (res.error) { log('观众重连失败: ' + res.error, 'error'); networkRecoveryState.isRecovering = false; showReconnectOverlay(false); return; }
+      if (res.error) { log('Viewer rejoin failed: ' + res.error, 'error'); networkRecoveryState.isRecovering = false; showReconnectOverlay(false); return; }
       myPeerId = res.peerId; myRole = 'viewer';
       if (res.iceConfig) serverIceConfig = res.iceConfig;
       myNodeState = createMyNodeState();
@@ -2112,7 +2131,7 @@ function autoRejoin() {
         await connectToParent(primaryParentId, 'primary');
         setTimeout(function() { maybeAdjustBackups(); }, 3000);
       }
-      log('观众重连成功 room=' + savedRoom);
+      log('Viewer rejoin OK room=' + savedRoom);
       networkRecoveryState.isRecovering = false;
       showReconnectOverlay(false);
     });
@@ -2138,9 +2157,9 @@ function checkStreamHealth() {
     if (!hasInbound) return;
     if (streamHealthState.prevBytesReceived > 0 && totalBytes <= streamHealthState.prevBytesReceived) {
       streamHealthState.stallCount++;
-      log('流量停滞 (' + streamHealthState.stallCount + '/' + STALL_THRESHOLD + ') bytes=' + totalBytes + ' primary=' + peerTag(primaryParentId) + ' ice=' + iceState, 'warn');
+      log('Stream stall (' + streamHealthState.stallCount + '/' + STALL_THRESHOLD + ') bytes=' + totalBytes + ' primary=' + peerTag(primaryParentId) + ' ice=' + iceState, 'warn');
       if (streamHealthState.stallCount >= STALL_THRESHOLD) {
-        log('主连接流量停滞，触发故障转移', 'error');
+        log('Primary stream stalled, triggering failover', 'error');
         streamHealthState.failoverInProgress = true;
         promoteOrFindNewPrimary();
       }
@@ -2198,7 +2217,7 @@ function startPeriodicTasks() {
     connections.forEach(function(conn, key) { connSummary.push(key + '=' + conn.iceState + (conn.stream ? '(' + conn.stream.getTracks().length + 't)' : '') + (conn.dc ? '[dc=' + conn.dc.readyState + ']' : '[no-dc]')); });
     var summaryStr = connSummary.join(', ');
     if (connSummary.length > 0 && summaryStr !== prevLogState.connSummary) {
-      log('连接状态: role=' + myRole + ' primary=' + peerTag(primaryParentId) + ' backups=[' + backupParents.map(peerTag).join(',') + '] topo=' + topologyMap.size + '节点 pending=' + pendingConnects.size + ' conns=[' + summaryStr + ']', 'debug');
+      log('Conn status: role=' + myRole + ' primary=' + peerTag(primaryParentId) + ' backups=[' + backupParents.map(peerTag).join(',') + '] topo=' + topologyMap.size + ' nodes pending=' + pendingConnects.size + ' conns=[' + summaryStr + ']', 'debug');
       prevLogState.connSummary = summaryStr;
     }
     // Update viewer status bar
@@ -2218,7 +2237,7 @@ function checkRoomStatus() {
   socket.emit('getRoomList', function(list) {
     var roomExists = list.some(function(r) { return r.roomId === currentRoomId; });
     if (!roomExists) {
-      log('房间已不存在，主播已离开', 'warn');
+      log('Room no longer exists, publisher left', 'warn');
       alert(t('liveEnded'));
       cleanup();
       switchTab('lobby');
@@ -2275,7 +2294,7 @@ function cleanupStaleConnections() {
     if (conn) {
       var age = conn.createdAt ? Math.round((now - conn.createdAt) / 1000) : '?';
       var discAge = conn.disconnectedAt ? Math.round((now - conn.disconnectedAt) / 1000) : '-';
-      log('清理过期连接: ' + key + ' ice=' + conn.iceState + ' age=' + age + 's discAge=' + discAge + 's peer=' + peerTag(conn.peerId), 'warn');
+      log('Cleanup stale connection: ' + key + ' ice=' + conn.iceState + ' age=' + age + 's discAge=' + discAge + 's peer=' + peerTag(conn.peerId), 'warn');
       conn.pc.close(); connections.delete(key); pendingConnects.delete(key);
       
       // If this was our primary, failover
@@ -2289,7 +2308,7 @@ function cleanupStaleConnections() {
         var bIdx = backupParents.indexOf(conn.peerId);
         if (bIdx >= 0) {
           backupParents.splice(bIdx, 1);
-          log('从备用列表移除: ' + peerTag(conn.peerId), 'debug');
+          log('Removed from backup list: ' + peerTag(conn.peerId), 'debug');
         }
       }
     }
@@ -2304,7 +2323,7 @@ function cleanupStaleConnections() {
   if (myRole === 'viewer' && totalConns > 0 && allStuck && !networkRecoveryState.isRecovering && !failoverInProgress && peersInCooldown === 0) {
     var socketOk = socket && socket.connected;
     if (socketOk) {
-      log('检测到所有连接异常 (stuck=' + stuckInNewCount + '/' + totalConns + ')，触发网络恢复', 'warn');
+      log('All connections abnormal (stuck=' + stuckInNewCount + '/' + totalConns + '), triggering network recovery', 'warn');
       handleNetworkChange();
     }
   }
@@ -2339,7 +2358,7 @@ function copyLogs() {
     var ta = document.createElement('textarea');
     ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
     document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); showCopyToast(area.childNodes.length); } catch(e) { log('复制失败: ' + e.message, 'error'); }
+    try { document.execCommand('copy'); showCopyToast(area.childNodes.length); } catch(e) { log('Copy failed: ' + e.message, 'error'); }
     document.body.removeChild(ta);
   });
 }
@@ -2376,7 +2395,7 @@ function updateIceStatusUI() {
       if (st === 'connected' || st === 'completed') color = '#0f9';
       else if (st === 'checking' || st === 'new') color = '#ff0';
       else if (st === 'failed' || st === 'disconnected' || st === 'closed') color = '#f33';
-      var rl = conn.role === 'primary' ? '↑主' : conn.role.indexOf('backup') === 0 ? '↑备' : '?';
+      var rl = conn.role === 'primary' ? '↑pri' : conn.role.indexOf('backup') === 0 ? '↑bak' : '?';
       var li = linkInfo.get(conn.peerId);
       var linkLabel = li ? ' [' + li.linkType + ']' : '';
       var b = document.createElement('div'); b.className = 'ice-badge'; b.style.background = color + '22'; b.style.color = color;
@@ -2399,7 +2418,7 @@ function updateIceStatusUI() {
       var li = linkInfo.get(conn.peerId);
       var linkLabel = li ? ' [' + li.linkType + ']' : '';
       var tag = conn.childTag ? '(' + conn.childTag + ')' : '';
-      html += '<div class="ice-badge" style="background:' + color + '22;color:' + color + '"><span class="dot" style="background:' + color + '"></span>↓子 ' + peerTag(conn.peerId) + ' ' + tag + ' ' + st + linkLabel + '</div>';
+      html += '<div class="ice-badge" style="background:' + color + '22;color:' + color + '"><span class="dot" style="background:' + color + '"></span>↓ch ' + peerTag(conn.peerId) + ' ' + tag + ' ' + st + linkLabel + '</div>';
     });
     hc.innerHTML = childCount > 0 ? html : '<span style="color:var(--muted);font-size:12px">' + t('noChildNodes') + '</span>';
   }
@@ -2465,7 +2484,7 @@ function showRemoteVideo(peerId, stream) {
   var playPromise = v.play();
   if (playPromise !== undefined) {
     playPromise.catch(function(err) {
-      log('视频自动播放被阻止: ' + err.message, 'warn');
+      log('Video autoplay blocked: ' + err.message, 'warn');
       function resumePlay() { v.play().catch(function() {}); document.removeEventListener('touchstart', resumePlay); document.removeEventListener('click', resumePlay); }
       document.addEventListener('touchstart', resumePlay, { once: true });
       document.addEventListener('click', resumePlay, { once: true });
@@ -2510,7 +2529,7 @@ function drawTopology() {
   // Build node list from topology map
   var nodes = [];
   topologyMap.forEach(function(ns) { nodes.push(ns); });
-  if (nodes.length === 0) { ctx.fillStyle = '#555'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('暂无拓扑数据', W / 2, H / 2); return; }
+  if (nodes.length === 0) { ctx.fillStyle = '#555'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('No topology data', W / 2, H / 2); return; }
 
   var root = null;
   for (var ni = 0; ni < nodes.length; ni++) { if (nodes[ni].role === 'publisher') { root = nodes[ni]; break; } }
@@ -2624,7 +2643,7 @@ function drawTopology() {
     ctx.fillText(icon, nd.x, nd.y);
     ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top';
     var label = n.nickname || n.peerId.substring(0, 6);
-    var meTag = n.peerId === myPeerId ? ' (我)' : '';
+    var meTag = n.peerId === myPeerId ? ' (me)' : '';
     ctx.fillText(label + meTag, nd.x, nd.y + nodeRadius + 4);
     // RTT label
     if (li && li.rtt > 0) {
@@ -2731,7 +2750,7 @@ function showToast(msg) {
 // URL format: ?room=room1            — auto-join as viewer
 //             ?room=room1&pwd=123    — auto-join with password
 //             ?room=room1&nick=Tom   — auto-join with custom nickname
-// Auto-generates a viewer name like "观众A3K7" if nick is not provided.
+// Auto-generates a viewer name if nick is not provided.
 // ============================================================
 (function autoJoinFromUrl() {
   var params = new URLSearchParams(window.location.search);
@@ -2748,7 +2767,7 @@ function showToast(msg) {
 
   // Auto-join after a short delay to let socket.io script load
   setTimeout(function() {
-    log('通过链接直接加入: room=' + room + ' nick=' + nick);
+    log('Direct join via URL: room=' + room + ' nick=' + nick);
     joinAsViewer();
   }, 300);
 })();

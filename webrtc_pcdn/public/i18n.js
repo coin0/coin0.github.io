@@ -150,7 +150,7 @@ function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach(function(el) {
     var key = el.getAttribute('data-i18n');
     var val = t(key);
-    if (val) {
+    if (val !== undefined && val !== null) {
       if (el.tagName === 'OPTION') el.textContent = val;
       else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = val;
       else el.textContent = val;
