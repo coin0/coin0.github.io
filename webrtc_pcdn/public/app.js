@@ -2699,3 +2699,55 @@ function cleanup() {
 window.addEventListener('resize', function() {
   if (document.getElementById('tab-topology').classList.contains('active')) drawTopology();
 });
+
+// ============================================================
+// Copy Invite Link
+// ============================================================
+function copyInviteLink() {
+  if (!currentRoomId) return;
+  var url = location.origin + location.pathname + '?room=' + encodeURIComponent(currentRoomId);
+  if (currentRoomPwd) url += '&pwd=' + encodeURIComponent(currentRoomPwd);
+  navigator.clipboard.writeText(url).then(function() {
+    log('邀请链接已复制: ' + url);
+    showToast('邀请链接已复制');
+  }).catch(function() {
+    prompt('复制此链接分享给观众:', url);
+  });
+}
+
+function showToast(msg) {
+  var el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#27ae60;color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s';
+  document.body.appendChild(el);
+  requestAnimationFrame(function() { el.style.opacity = '1'; });
+  setTimeout(function() { el.style.opacity = '0'; setTimeout(function() { el.remove(); }, 300); }, 2000);
+}
+
+// ============================================================
+// Direct Join via URL Parameters (mobile sharing)
+// ============================================================
+// URL format: ?room=room1            — auto-join as viewer
+//             ?room=room1&pwd=123    — auto-join with password
+//             ?room=room1&nick=Tom   — auto-join with custom nickname
+// Auto-generates a viewer name like "观众A3K7" if nick is not provided.
+// ============================================================
+(function autoJoinFromUrl() {
+  var params = new URLSearchParams(window.location.search);
+  var room = params.get('room');
+  if (!room) return;
+
+  var pwd = params.get('pwd') || '';
+  var nick = params.get('nick') || ('观众' + Math.floor(Math.random() * 10000));
+
+  // Fill form fields so the rest of the flow works normally
+  document.getElementById('joinRoomInput').value = room;
+  document.getElementById('joinPassword').value = pwd;
+  document.getElementById('viewerNickname').value = nick;
+
+  // Auto-join after a short delay to let socket.io script load
+  setTimeout(function() {
+    log('通过链接直接加入: room=' + room + ' nick=' + nick);
+    joinAsViewer();
+  }, 300);
+})();
